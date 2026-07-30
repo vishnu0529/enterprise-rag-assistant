@@ -1,7 +1,11 @@
 import time
 
+from app.core.config import settings
 from app.models.schemas import Citation
+from app.services.hybrid_search import search_hybrid
 from app.services.llm_client import LLMResult, call_llm
+from app.services.query_rewriter import rewrite_query
+from app.services.reranker import rerank
 from app.services.vector_store import search
 
 SYSTEM_PROMPT = (
@@ -21,6 +25,24 @@ def build_context(chunks: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
+def retrieve(question: str, top_k: int | None = None, document_id: str | None = None) -> list[dict]:
+    """Retrieval pipeline: optionally hybrid search (BM25 + vector via RRF)
+    over a wide candidate pool, then optionally rerank down to top_k with a
+    cross-encoder. Each stage degrades gracefully to the prior round's plain
+    vector search when disabled via config, rather than breaking."""
+    final_k = top_k or settings.TOP_K
+    pool_size = settings.HYBRID_CANDIDATE_POOL if settings.ENABLE_RERANKING else final_k
+
+    if settings.ENABLE_HYBRID_SEARCH:
+        candidates = search_hybrid(question, top_k=pool_size, document_id=document_id)
+    else:
+        candidates = search(question, top_k=pool_size, document_id=document_id)
+
+    if settings.ENABLE_RERANKING and candidates:
+        return rerank(question, candidates, top_k=final_k)
+    return candidates[:final_k]
+
+
 def answer_question(
     question: str,
     top_k: int | None = None,
@@ -28,7 +50,12 @@ def answer_question(
     history: list[dict] | None = None,
 ) -> dict:
     start = time.perf_counter()
-    chunks = search(question, top_k=top_k, document_id=document_id)
+
+    search_query = question
+    if settings.ENABLE_QUERY_REWRITING:
+        search_query = rewrite_query(question, history=history)
+
+    chunks = retrieve(search_query, top_k=top_k, document_id=document_id)
 
     if not chunks:
         return {

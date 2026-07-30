@@ -40,7 +40,10 @@ def test_build_context_uses_page_number_when_present():
 
 
 def test_answer_question_with_no_retrieved_chunks_short_circuits():
-    with patch("app.services.rag_chain.search", return_value=[]):
+    # No history -> rewrite_query's no-op fast path applies, no LLM call
+    # made for rewriting; retrieve() is mocked directly (the pipeline's
+    # unified entry point) rather than the individual hybrid/rerank stages.
+    with patch("app.services.rag_chain.retrieve", return_value=[]):
         result = answer_question("Anything?")
 
     assert result["citations"] == []
@@ -56,7 +59,7 @@ def test_answer_question_returns_citations_and_metrics():
     )
 
     with (
-        patch("app.services.rag_chain.search", return_value=SAMPLE_CHUNKS),
+        patch("app.services.rag_chain.retrieve", return_value=SAMPLE_CHUNKS),
         patch("app.services.rag_chain.call_llm", return_value=fake_llm_result) as mock_call_llm,
     ):
         result = answer_question("How many annual leave days?")
@@ -76,10 +79,38 @@ def test_answer_question_passes_history_into_prompt():
     history = [{"role": "user", "content": "earlier question"}]
 
     with (
-        patch("app.services.rag_chain.search", return_value=SAMPLE_CHUNKS),
+        # History is present, so rewrite_query would otherwise attempt a
+        # real LLM call — mock it directly to keep this test fast and
+        # network-free (query_rewriter's own no-op/fallback behavior is
+        # covered by tests/test_query_rewriter.py).
+        patch("app.services.rag_chain.rewrite_query", return_value="follow up question"),
+        patch("app.services.rag_chain.retrieve", return_value=SAMPLE_CHUNKS),
         patch("app.services.rag_chain.call_llm", return_value=fake_llm_result) as mock_call_llm,
     ):
         answer_question("follow up question", history=history)
 
     _, user_prompt = mock_call_llm.call_args[0]
     assert "earlier question" in user_prompt
+
+
+def test_retrieve_disables_hybrid_and_reranking_gracefully():
+    """When both Phase 2 flags are off, retrieve() falls back to plain
+    vector search — the prior round's behavior — rather than breaking."""
+    from app.core.config import settings
+    from app.services.rag_chain import retrieve
+
+    original_hybrid, original_rerank = (
+        settings.ENABLE_HYBRID_SEARCH,
+        settings.ENABLE_RERANKING,
+    )
+    settings.ENABLE_HYBRID_SEARCH = False
+    settings.ENABLE_RERANKING = False
+    try:
+        with patch("app.services.rag_chain.search", return_value=SAMPLE_CHUNKS) as mock_search:
+            result = retrieve("How many annual leave days?", top_k=2)
+    finally:
+        settings.ENABLE_HYBRID_SEARCH = original_hybrid
+        settings.ENABLE_RERANKING = original_rerank
+
+    mock_search.assert_called_once()
+    assert result == SAMPLE_CHUNKS
