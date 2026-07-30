@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     # Retrieval
     TOP_K: int = 4
 
+    # Phase 2: advanced RAG (hybrid search + reranking + query rewriting).
+    # Each stage is independently toggleable so its effect is observable
+    # and comparable (see scripts/run_evaluation.py's before/after run).
+    ENABLE_QUERY_REWRITING: bool = True
+    ENABLE_HYBRID_SEARCH: bool = True
+    ENABLE_RERANKING: bool = True
+    HYBRID_CANDIDATE_POOL: int = 20
+    RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
     LOG_LEVEL: str = "INFO"
 
     model_config = {
