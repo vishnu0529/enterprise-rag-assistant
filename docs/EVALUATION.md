@@ -1,58 +1,30 @@
-# Evaluation
+# Evaluation Results
 
-Metrics follow the [RAGAS methodology](https://docs.ragas.io) — faithfulness,
-answer relevancy, context precision, context recall — implemented directly in
-`app/services/evaluation.py` rather than via the `ragas` package (which has a
-broken import against this project's langchain-community version; see that
-file's docstring). Each metric uses an LLM-as-judge call or embedding
-similarity, following the same published formulas RAGAS uses.
+Run against 4 fixed Q&A pairs over `sample_docs/company_handbook.md`, using `gemini-2.0-flash` via `google`.
 
-## What's verified vs. what's pending
+Metrics follow the RAGAS methodology, implemented directly in `app/services/evaluation.py` (see that file's docstring for why).
 
-**Verified — metric logic is correct.** All four metrics have unit tests
-(`tests/test_evaluation.py`) exercising known-correct and known-incorrect
-inputs (e.g. a fully-hallucinated claim scores faithfulness `0.0`, and a
-judge-call failure degrades to `0.0` rather than crashing). The full RAG
-pipeline plus evaluation was also verified end-to-end against real ingested
-documents with a mocked LLM standing in for the model (see the commit
-history for `app/services/evaluation.py` and `app/services/rag_chain.py`).
-22/22 tests pass; `pytest -q` reproduces this.
+## Retrieval Comparison (live, no LLM required)
 
-**Pending — a live run against this project's own API key.**
-`scripts/run_evaluation.py` runs the fixed 4-question eval set below through
-the *real* Gemini API and writes real scores here. Running it today produces:
+Baseline = plain vector search (last round). Phase 2 = hybrid search (BM25 + vector via Reciprocal Rank Fusion) + cross-encoder reranking. Embeddings run on a local `sentence-transformers` model, not Gemini, so this comparison is unaffected by API quota.
+
+| Question | Baseline top chunk | Phase 2 top chunk | Changed? |
+|---|---|---|---|
+| How many days of annual leave do full-ti… | # Acme Corp Employee Handbook ## Remote Work Policy Employee | # Acme Corp Employee Handbook ## Remote Work Policy Employee | No |
+| How many days per week can employees wor… | # Acme Corp Employee Handbook ## Remote Work Policy Employee | # Acme Corp Employee Handbook ## Remote Work Policy Employee | No |
+| What is the expense reimbursement thresh… | # Acme Corp Employee Handbook ## Remote Work Policy Employee | # Acme Corp Employee Handbook ## Remote Work Policy Employee | No |
+| How much paid parental leave do secondar… | ## Parental Leave Primary caregivers are entitled to 16 week | ## Parental Leave Primary caregivers are entitled to 16 week | No |
+
+Note: `sample_docs/company_handbook.md` is a small demo document that chunks into only 2 pieces at the configured `CHUNK_SIZE` (chunk 0 alone contains the Remote Work, Annual Leave, and Expense Reimbursement sections). With only 2 candidates total, baseline and Phase 2 agreeing on the same top chunk is the *correct* outcome, not a null result — it confirms Phase 2 doesn't regress retrieval on a known-correct case. Hybrid search and reranking earn their keep on larger, more ambiguous corpora with lexical/semantic mismatches, where there's actually room for the ranking to differ.
+
+## Full Metrics: Faithfulness / Relevancy / Precision / Recall
+
+**Not available this run.** This requires live LLM access for both answer generation and LLM-as-judge scoring. The actual error raised during this run was:
 
 ```
-google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED.
-Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests,
-limit: 0, model: gemini-2.0-flash
+ValueError: No API key was provided. Please pass a valid API key. Learn how to create an API key at https://ai.google.dev/gemini-api/docs/api-key.
 ```
 
-This is an account-level free-tier quota limit (`limit: 0` — i.e. no free
-daily allowance configured for this Google Cloud project/model), not a bug
-in the evaluation code — the same key hits the same error from
-`ai-resume-matcher`'s existing usage. Once billing/quota is configured for
-this key (or a different `GOOGLE_API_KEY`/`ANTHROPIC_API_KEY` is set in
-`.env`), running `python scripts/run_evaluation.py` will populate the table
-below with real faithfulness/relevancy/precision/recall/latency/cost numbers
-against `sample_docs/company_handbook.md`.
+Re-run this script once that's resolved (e.g. a valid `GOOGLE_API_KEY` in `.env`, or the daily quota resetting if it's a quota error — this project hit a `GenerateRequestsPerDayPerProjectPerModel-FreeTier` 20/day cap earlier in development). The code path for the full before/after comparison is implemented and only needs live LLM access to produce numbers.
 
-## Fixed evaluation set
-
-| # | Question | Ground truth |
-|---|---|---|
-| 1 | How many days of annual leave do full-time employees get, and does it increase over time? | 25 days/year, rising to 30 after 5 years of continuous service |
-| 2 | How many days per week can employees work remotely without special approval? | Up to 3 days/week; full-time remote needs director approval |
-| 3 | What is the expense reimbursement threshold that requires manager approval? | Above £500 requires written line-manager sign-off |
-| 4 | How much paid parental leave do secondary caregivers get? | 4 weeks fully paid |
-
-## How to fill this in with real numbers
-
-```bash
-export GOOGLE_API_KEY=<a key with available quota>
-python scripts/run_evaluation.py
-```
-
-This overwrites this file with a results table (per-question scores +
-averages) and an approximate token-cost estimate, generated directly from a
-live run — not hand-written.
+The retrieval comparison above needs no LLM calls and reflects real, live results from this run.
