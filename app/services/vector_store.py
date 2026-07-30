@@ -85,6 +85,48 @@ def search(query: str, top_k: int | None = None, document_id: str | None = None)
     ]
 
 
+def get_all_chunks(document_id: str | None = None) -> list[dict]:
+    """Scrolls every chunk currently in the collection — used to build the
+    in-memory BM25 index for hybrid search (app/services/hybrid_search.py).
+    Qdrant stays the single source of truth; nothing is duplicated to a
+    second persisted store."""
+    client = get_client()
+    query_filter = None
+    if document_id:
+        query_filter = qmodels.Filter(
+            must=[
+                qmodels.FieldCondition(
+                    key="document_id", match=qmodels.MatchValue(value=document_id)
+                )
+            ]
+        )
+    chunks = []
+    next_offset = None
+    while True:
+        points, next_offset = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION,
+            scroll_filter=query_filter,
+            limit=256,
+            offset=next_offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for p in points:
+            chunks.append(
+                {
+                    "chunk_id": str(p.id),
+                    "document_id": p.payload["document_id"],
+                    "filename": p.payload["filename"],
+                    "text": p.payload["text"],
+                    "page": p.payload.get("page"),
+                    "chunk_index": p.payload["chunk_index"],
+                }
+            )
+        if next_offset is None:
+            break
+    return chunks
+
+
 def delete_document(document_id: str) -> None:
     client = get_client()
     client.delete(

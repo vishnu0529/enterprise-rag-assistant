@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.core.db import get_session
 from app.models.schemas import Document, DocumentOut, IngestResponse
+from app.services import hybrid_search
 from app.services.ingestion import SUPPORTED_EXTENSIONS, chunk_document, load_text
 from app.services.vector_store import delete_document, upsert_chunks
 
@@ -39,6 +40,7 @@ async def ingest_document(file: UploadFile = File(...), session: Session = Depen
         raise HTTPException(400, "Document produced no usable chunks")
 
     upsert_chunks(chunks)
+    hybrid_search.invalidate()
 
     doc = Document(id=document_id, filename=file.filename, num_chunks=len(chunks))
     session.add(doc)
@@ -58,6 +60,7 @@ def remove_document(document_id: str, session: Session = Depends(get_session)):
     if not doc:
         raise HTTPException(404, "Document not found")
     delete_document(document_id)
+    hybrid_search.invalidate()
     session.delete(doc)
     session.commit()
     return {"deleted": document_id}

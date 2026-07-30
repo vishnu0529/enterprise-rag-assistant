@@ -19,6 +19,7 @@ torch==2.2.2
 numpy<2
 sentence-transformers==3.0.1
 qdrant-client==1.18.0
+rank-bm25==0.2.2
 
 # Document parsing
 pdfplumber==0.11.10
