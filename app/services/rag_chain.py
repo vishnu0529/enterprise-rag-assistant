@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 from app.models.schemas import Citation
 from app.services.llm_client import LLMResult, call_llm
@@ -24,9 +23,9 @@ def build_context(chunks: list[dict]) -> str:
 
 def answer_question(
     question: str,
-    top_k: Optional[int] = None,
-    document_id: Optional[str] = None,
-    history: Optional[list[dict]] = None,
+    top_k: int | None = None,
+    document_id: str | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
     start = time.perf_counter()
     chunks = search(question, top_k=top_k, document_id=document_id)

@@ -1,0 +1,9 @@
+line-length = 100
+extend-exclude = ["venv"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "ISC", "BLE"]
+ignore = [
+    "B008",   # FastAPI's Depends()/File() in argument defaults is the idiomatic pattern
+    "BLE001", # intentional: evaluation judge calls degrade to 0.0 on any failure rather than crash
+]

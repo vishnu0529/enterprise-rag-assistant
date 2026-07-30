@@ -1,9 +1,7 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
-
 
 # --- Persisted tables (SQLModel) ---
 
@@ -21,7 +19,7 @@ class ChatSession(SQLModel, table=True):
 
 
 class ChatMessage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     session_id: str = Field(foreign_key="chatsession.id", index=True)
     role: str  # "user" | "assistant"
     content: str
@@ -47,7 +45,7 @@ class IngestResponse(BaseModel):
 class Citation(BaseModel):
     document_id: str
     filename: str
-    page: Optional[int] = None
+    page: int | None = None
     chunk_index: int
     score: float
     text: str
@@ -55,9 +53,9 @@ class Citation(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    session_id: Optional[str] = None
-    document_id: Optional[str] = None
-    top_k: Optional[int] = None
+    session_id: str | None = None
+    document_id: str | None = None
+    top_k: int | None = None
 
 
 class ChatResponse(BaseModel):

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -10,8 +8,8 @@ router = APIRouter(tags=["evaluation"])
 
 class EvaluateRequest(BaseModel):
     question: str
-    ground_truth: Optional[str] = None
-    top_k: Optional[int] = None
+    ground_truth: str | None = None
+    top_k: int | None = None
 
 
 class EvaluateResponse(BaseModel):
