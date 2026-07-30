@@ -4,6 +4,7 @@ venv/
 .env
 *.db
 qdrant_data/
+uploaded_docs/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
