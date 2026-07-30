@@ -1,0 +1,69 @@
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
+from sqlmodel import Field, SQLModel
+
+
+# --- Persisted tables (SQLModel) ---
+
+
+class Document(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    filename: str
+    num_chunks: int
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatSession(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: str = Field(foreign_key="chatsession.id", index=True)
+    role: str  # "user" | "assistant"
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# --- API request/response models (Pydantic) ---
+
+
+class DocumentOut(BaseModel):
+    id: str
+    filename: str
+    num_chunks: int
+    uploaded_at: datetime
+
+
+class IngestResponse(BaseModel):
+    document_id: str
+    filename: str
+    num_chunks: int
+
+
+class Citation(BaseModel):
+    document_id: str
+    filename: str
+    page: Optional[int] = None
+    chunk_index: int
+    score: float
+    text: str
+
+
+class ChatRequest(BaseModel):
+    question: str
+    session_id: Optional[str] = None
+    document_id: Optional[str] = None
+    top_k: Optional[int] = None
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    answer: str
+    citations: list[Citation]
+    latency_ms: float
+    prompt_tokens: int
+    completion_tokens: int
