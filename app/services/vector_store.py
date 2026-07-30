@@ -48,15 +48,13 @@ def upsert_chunks(chunks: list[dict]) -> int:
                 "chunk_index": c["chunk_index"],
             },
         )
-        for c, vector in zip(chunks, vectors)
+        for c, vector in zip(chunks, vectors, strict=True)
     ]
     client.upsert(collection_name=settings.QDRANT_COLLECTION, points=points)
     return len(points)
 
 
-def search(
-    query: str, top_k: int | None = None, document_id: str | None = None
-) -> list[dict]:
+def search(query: str, top_k: int | None = None, document_id: str | None = None) -> list[dict]:
     client = get_client()
     query_vector = embed_query(query)
     query_filter = None

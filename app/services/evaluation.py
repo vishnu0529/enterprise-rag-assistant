@@ -7,7 +7,6 @@ the metrics directly avoids that fragility and is functionally equivalent.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -64,7 +63,7 @@ def score_answer_relevancy(question: str, answer: str, n: int = 3) -> float:
     off-topic responses."""
     system = (
         f"Given the ANSWER below, generate {n} distinct questions that this "
-        'answer would directly and completely address. Respond as JSON: '
+        "answer would directly and completely address. Respond as JSON: "
         '{"questions": ["...", "...", "..."]}'
     )
     try:
@@ -87,7 +86,7 @@ def score_context_precision(question: str, contexts: list[str]) -> float:
         return 0.0
     system = (
         "You are an evaluation judge. Given the QUESTION, decide whether the "
-        'CONTEXT chunk is relevant to answering it. Respond as JSON: '
+        "CONTEXT chunk is relevant to answering it. Respond as JSON: "
         '{"relevant": true|false}'
     )
     relevances = []
@@ -116,7 +115,7 @@ def score_context_recall(ground_truth: str, contexts: list[str]) -> float:
     system = (
         "You are an evaluation judge. Break the GROUND_TRUTH answer into "
         "individual factual statements, then decide for each whether it can "
-        'be attributed to (found in) the CONTEXT. Respond as JSON: '
+        "be attributed to (found in) the CONTEXT. Respond as JSON: "
         '{"statements": [{"statement": "...", "attributed": true|false}, ...]}'
     )
     user = f"CONTEXT:\n{chr(10).join(contexts)}\n\nGROUND_TRUTH:\n{ground_truth}"
@@ -132,7 +131,7 @@ def score_context_recall(ground_truth: str, contexts: list[str]) -> float:
 
 
 def evaluate_question(
-    question: str, ground_truth: Optional[str] = None, top_k: Optional[int] = None
+    question: str, ground_truth: str | None = None, top_k: int | None = None
 ) -> EvalResult:
     result = answer_question(question, top_k=top_k)
     contexts = result["contexts"]
@@ -143,9 +142,7 @@ def evaluate_question(
         faithfulness=score_faithfulness(result["answer"], contexts),
         answer_relevancy=score_answer_relevancy(question, result["answer"]),
         context_precision=score_context_precision(question, contexts),
-        context_recall=score_context_recall(ground_truth, contexts)
-        if ground_truth
-        else 0.0,
+        context_recall=score_context_recall(ground_truth, contexts) if ground_truth else 0.0,
         latency_ms=result["latency_ms"],
         prompt_tokens=result["prompt_tokens"],
         completion_tokens=result["completion_tokens"],

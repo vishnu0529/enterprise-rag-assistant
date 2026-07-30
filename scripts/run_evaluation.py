@@ -11,24 +11,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.config import settings  # noqa: E402
-from app.core.db import init_db  # noqa: E402
-from app.services.evaluation import evaluate_question  # noqa: E402
-from app.services.ingestion import chunk_document, load_text  # noqa: E402
-from app.services.vector_store import upsert_chunks  # noqa: E402
+from app.core.config import settings
+from app.core.db import init_db
+from app.services.evaluation import evaluate_question
+from app.services.ingestion import chunk_document, load_text
+from app.services.vector_store import upsert_chunks
 
+# noqa: E501 — these are natural-language eval data, not code; wrapping them
+# would hurt readability more than the line-length lint helps.
 EVAL_SET = [
     {
-        "question": "How many days of annual leave do full-time employees get, and does it increase over time?",
-        "ground_truth": "Full-time employees get 25 days of annual leave per year, increasing to 30 days after 5 years of continuous service.",
+        "question": "How many days of annual leave do full-time employees get, and does it increase over time?",  # noqa: E501
+        "ground_truth": "Full-time employees get 25 days of annual leave per year, increasing to 30 days after 5 years of continuous service.",  # noqa: E501
     },
     {
         "question": "How many days per week can employees work remotely without special approval?",
-        "ground_truth": "Employees may work remotely up to 3 days per week without special approval; full-time remote work needs department director approval.",
+        "ground_truth": "Employees may work remotely up to 3 days per week without special approval; full-time remote work needs department director approval.",  # noqa: E501
     },
     {
         "question": "What is the expense reimbursement threshold that requires manager approval?",
-        "ground_truth": "Expenses above £500 require written sign-off from a line manager before being incurred.",
+        "ground_truth": "Expenses above £500 require written sign-off from a line manager before being incurred.",  # noqa: E501
     },
     {
         "question": "How much paid parental leave do secondary caregivers get?",
@@ -45,11 +47,7 @@ COST_PER_1K_COMPLETION_TOKENS_USD = 0.0003
 def main() -> None:
     init_db()
 
-    sample_doc = (
-        Path(__file__).resolve().parent.parent
-        / "sample_docs"
-        / "company_handbook.md"
-    )
+    sample_doc = Path(__file__).resolve().parent.parent / "sample_docs" / "company_handbook.md"
     pages = load_text(sample_doc)
     chunks = chunk_document("eval-doc", sample_doc.name, pages)
     upsert_chunks(chunks)
@@ -78,20 +76,22 @@ def main() -> None:
     lines = [
         "# Evaluation Results",
         "",
-        f"Run against {len(EVAL_SET)} fixed Q&A pairs over "
-        f"`sample_docs/company_handbook.md`, using `{settings.LLM_MODEL}` "
-        f"via `{settings.LLM_PROVIDER}`.",
+        (
+            f"Run against {len(EVAL_SET)} fixed Q&A pairs over "
+            f"`sample_docs/company_handbook.md`, using `{settings.LLM_MODEL}` "
+            f"via `{settings.LLM_PROVIDER}`."
+        ),
         "",
-        "Metrics follow the RAGAS methodology, implemented directly in "
-        "`app/services/evaluation.py` (see that file's docstring for why).",
+        (
+            "Metrics follow the RAGAS methodology, implemented directly in "
+            "`app/services/evaluation.py` (see that file's docstring for why)."
+        ),
         "",
-        "| Question | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Latency (ms) |",
+        "| Question | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Latency (ms) |",  # noqa: E501
         "|---|---|---|---|---|---|",
     ]
-    for item, r in zip(EVAL_SET, results):
-        q_short = item["question"][:60] + (
-            "…" if len(item["question"]) > 60 else ""
-        )
+    for item, r in zip(EVAL_SET, results, strict=True):
+        q_short = item["question"][:60] + ("…" if len(item["question"]) > 60 else "")
         lines.append(
             f"| {q_short} | {r.faithfulness:.2f} | {r.answer_relevancy:.2f} | "
             f"{r.context_precision:.2f} | {r.context_recall:.2f} | {r.latency_ms:.0f} |"
@@ -109,9 +109,7 @@ def main() -> None:
         f"- Estimated cost (illustrative pricing, not official rates): ${est_cost:.5f}",
     ]
 
-    out_path = (
-        Path(__file__).resolve().parent.parent / "docs" / "EVALUATION.md"
-    )
+    out_path = Path(__file__).resolve().parent.parent / "docs" / "EVALUATION.md"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
     print(f"\nWrote results to {out_path}")

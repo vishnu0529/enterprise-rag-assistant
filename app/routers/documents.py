@@ -17,9 +17,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @router.post("", response_model=IngestResponse)
-async def ingest_document(
-    file: UploadFile = File(...), session: Session = Depends(get_session)
-):
+async def ingest_document(file: UploadFile = File(...), session: Session = Depends(get_session)):
     suffix = Path(file.filename).suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
@@ -46,9 +44,7 @@ async def ingest_document(
     session.add(doc)
     session.commit()
 
-    return IngestResponse(
-        document_id=document_id, filename=file.filename, num_chunks=len(chunks)
-    )
+    return IngestResponse(document_id=document_id, filename=file.filename, num_chunks=len(chunks))
 
 
 @router.get("", response_model=list[DocumentOut])
