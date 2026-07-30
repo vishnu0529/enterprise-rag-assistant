@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.core.db import init_db
-from app.routers import chat, documents
+from app.routers import chat, documents, evaluate
 
 
 @asynccontextmanager
@@ -27,3 +27,4 @@ def health():
 
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(evaluate.router)
