@@ -28,8 +28,13 @@ sqlmodel==0.0.39
 psycopg2-binary==2.9.12
 
 # Evaluation
-ragas==0.4.3
-datasets==5.0.1
+# NOTE: ragas==0.4.3 has a broken import in this environment
+# (langchain_community.chat_models.vertexai does not exist in the
+# langchain-community version above). RAGAS-methodology metrics
+# (faithfulness, answer relevancy, context precision/recall) are
+# implemented directly in app/services/evaluation.py instead — no
+# ragas/datasets dependency needed (numpy, pinned above, covers its
+# cosine-similarity math).
 
 # Demo UI
 streamlit==1.60.0
