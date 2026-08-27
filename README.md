@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 > Production-style Retrieval-Augmented Generation: document ingestion, cited
-> chat over your own documents, and a rigorous evaluation suite — not just
+> chat over your own documents, and a rigorous evaluation suite, not just
 > another RAG demo. Most portfolios stop at retrieval + generation; this one
 > also measures whether the answers are actually good.
 
@@ -31,13 +31,13 @@ Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.
 
 ## Features
 
-- **Multi-format ingestion** — PDF (page-tracked), Markdown, plain text
-- **Cited chat** — every answer references the specific document, page, and chunk it came from, with a relevance score
-- **Conversation memory** — session-aware, persisted in Postgres (prod) or SQLite (dev)
-- **Rigorous evaluation** — faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io)
-- **Dual LLM provider support** — Google Gemini or Anthropic Claude, same abstraction used in [ai-resume-matcher](https://github.com/vishnu0529/ai-resume-matcher)
-- **Local-first dev, production-shaped deploy** — runs with zero external services locally (embedded Qdrant, SQLite); `docker-compose` wires a real Qdrant + Postgres for a production-shaped stack, same code either way
-- **Actually-working Docker + CI** — a real `Dockerfile`, `docker-compose.yml`, and GitHub Actions workflow (lint → test → docker build), not placeholders
+- **Multi-format ingestion**: PDF (page-tracked), Markdown, plain text
+- **Cited chat**: every answer references the specific document, page, and chunk it came from, with a relevance score
+- **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
+- **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io)
+- **Dual LLM provider support**: Google Gemini or Anthropic Claude, same abstraction used in [ai-resume-matcher](https://github.com/vishnu0529/ai-resume-matcher)
+- **Local-first dev, production-shaped deploy**: runs with zero external services locally (embedded Qdrant, SQLite); `docker-compose` wires a real Qdrant + Postgres for a production-shaped stack, same code either way
+- **Actually-working Docker + CI**: a real `Dockerfile`, `docker-compose.yml`, and GitHub Actions workflow (lint → test → docker build), not placeholders
 
 ## Architecture
 
@@ -68,7 +68,7 @@ Full component breakdown and design decisions: [docs/ARCHITECTURE.md](docs/ARCHI
 | Vector store | Qdrant (embedded locally, real service via Docker) |
 | Embeddings | `BAAI/bge-small-en-v1.5` (local, free, no API cost) |
 | LLMs | Google Gemini / Anthropic Claude |
-| Session storage | SQLModel — SQLite (dev) / PostgreSQL (prod) |
+| Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Evaluation | RAGAS-methodology metrics, implemented directly (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
 | Testing | pytest, 22 tests, all mocked (no network/model load in CI) |
@@ -128,7 +128,7 @@ Four RAGAS-methodology metrics, run against a fixed 4-question eval set over
 including known-hallucination and judge-failure cases) and the whole
 pipeline was verified end-to-end with a mocked LLM. A live run against this
 project's own Gemini key currently hits a `429` free-tier quota limit
-(`limit: 0` requests/day — an account configuration issue, not a code bug).
+(`limit: 0` requests/day, an account configuration issue, not a code bug).
 Full details, the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 
 ## Running Tests
