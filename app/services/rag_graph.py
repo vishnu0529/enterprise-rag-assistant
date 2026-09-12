@@ -170,29 +170,51 @@ def draft_node(state: RagAgentState) -> dict:
     user_prompt = (
         f"{memory_text}{history_text}Context:\n{context}\n\nQuestion: {state['original_question']}"
     )
-    result = call_llm(SYSTEM_PROMPT, user_prompt)
-
-    citations = [
-        Citation(
-            document_id=c["document_id"],
-            filename=c["filename"],
-            page=c.get("page"),
-            chunk_index=c["chunk_index"],
-            score=c["score"],
-            text=c["text"][:300],
+    try:
+        result = call_llm(SYSTEM_PROMPT, user_prompt)
+        answer = result.text
+        prompt_tokens = result.prompt_tokens
+        completion_tokens = result.completion_tokens
+        llm_error = False
+    except Exception as e:
+        answer = (
+            f"Sorry, couldn't generate an answer right now ({type(e).__name__}). Try again soon."
         )
-        for c in chunks
-    ]
+        prompt_tokens = 0
+        completion_tokens = 0
+        llm_error = True
+
+    citations = (
+        []
+        if llm_error
+        else [
+            Citation(
+                document_id=c["document_id"],
+                filename=c["filename"],
+                page=c.get("page"),
+                chunk_index=c["chunk_index"],
+                score=c["score"],
+                text=c["text"][:300],
+            )
+            for c in chunks
+        ]
+    )
 
     return {
-        "answer": result.text,
+        "answer": answer,
         "citations": citations,
-        "prompt_tokens": state.get("prompt_tokens", 0) + result.prompt_tokens,
-        "completion_tokens": state.get("completion_tokens", 0) + result.completion_tokens,
+        "prompt_tokens": state.get("prompt_tokens", 0) + prompt_tokens,
+        "completion_tokens": state.get("completion_tokens", 0) + completion_tokens,
+        "llm_error": llm_error,
     }
 
 
 def critique_node(state: RagAgentState) -> dict:
+    if state.get("llm_error"):
+        # The Drafting Agent's call already failed — a faithfulness judge
+        # call would hit the exact same broken connection. Skip it; _should_retry
+        # checks llm_error directly and won't retry a failure retrying can't fix.
+        return {"faithfulness_score": None, "critique_feedback": ""}
     contexts = [c["text"] for c in state["chunks"]]
     score = score_faithfulness(state["answer"], contexts)
     feedback = (
@@ -204,6 +226,8 @@ def critique_node(state: RagAgentState) -> dict:
 
 
 def _should_retry(state: RagAgentState) -> str:
+    if state.get("llm_error"):
+        return "remember"
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", DEFAULT_MAX_RETRIES)
     if state.get("faithfulness_score", 1.0) < MIN_FAITHFULNESS and retry_count < max_retries:
@@ -213,7 +237,7 @@ def _should_retry(state: RagAgentState) -> str:
 
 def remember_node(state: RagAgentState) -> dict:
     user_id = state.get("user_id")
-    if user_id:
+    if user_id and not state.get("llm_error"):
         try:
             remember_exchange(
                 user_id=user_id,
