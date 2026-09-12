@@ -3,7 +3,7 @@ import uuid
 import requests
 import streamlit as st
 
-API_BASE = "http://localhost:8000"
+API_BASE = "https://enterprise-rag-assistant-53ke.onrender.com"
 
 st.set_page_config(
     page_title="Enterprise Knowledge Assistant",
@@ -46,12 +46,17 @@ with st.sidebar:
     st.divider()
     st.markdown("### Documents")
     try:
-        docs = requests.get(f"{api_base}/documents", timeout=5).json()
+        # Render's free tier spins the backend down after inactivity and
+        # cold-starts in ~30-60s on the next request — a short timeout here
+        # would misreport a cold start as "API unreachable".
+        docs = requests.get(f"{api_base}/documents", timeout=70).json()
     except requests.RequestException:
         docs = None
 
     if docs is None:
-        st.error(f"Can't reach API at {api_base}. Is it running?")
+        st.error(
+            f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting — try again in ~30s."
+        )
     elif not docs:
         st.caption("No documents ingested yet.")
     else:
@@ -152,7 +157,9 @@ if question:
                 "session_id": st.session_state.session_id,
                 "user_id": st.session_state.user_id or None,
             },
-            timeout=60,
+            # Generous: a cold Render start (~30-60s) can stack with up to 3
+            # strategize/draft/critique rounds if the corrective loop retries.
+            timeout=120,
         )
         resp.raise_for_status()
         data = resp.json()
