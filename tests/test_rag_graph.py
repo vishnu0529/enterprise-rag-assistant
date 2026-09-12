@@ -27,7 +27,11 @@ DEFAULTS = {
     "search": lambda *a, **k: SAMPLE_CHUNKS,
     "call_llm": lambda *a, **k: FAKE_LLM_RESULT,
     "score_faithfulness": lambda *a, **k: 0.9,
-    "call_llm_json": lambda *a, **k: {"query": "reformulated query"},
+    "call_llm_json": lambda *a, **k: {
+        "sub_queries": ["annual leave days"],
+        "top_k": 4,
+        "reasoning": "direct lookup",
+    },
     "recall_relevant_memory": lambda *a, **k: [],
     "remember_exchange": lambda *a, **k: None,
 }
@@ -54,6 +58,16 @@ def test_no_documents_short_circuits_without_calling_the_llm():
     mocks["call_llm"].assert_not_called()
 
 
+def test_strategist_runs_before_retrieval_and_plan_is_returned():
+    with ExitStack() as stack:
+        mocks = apply_patches(stack)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["sub_queries"] == ["annual leave days"]
+    assert result["strategist_reasoning"] == "direct lookup"
+    mocks["call_llm_json"].assert_called_once()  # strategist ran exactly once (no retry needed)
+
+
 def test_answers_without_retry_when_faithful_first_time():
     with ExitStack() as stack:
         mocks = apply_patches(stack, score_faithfulness=lambda *a, **k: 0.9)
@@ -62,11 +76,11 @@ def test_answers_without_retry_when_faithful_first_time():
     assert result["answer"] == FAKE_LLM_RESULT.text
     assert result["faithfulness_score"] == 0.9
     assert result["retries"] == 0
-    mocks["call_llm"].assert_called_once()
-    mocks["call_llm_json"].assert_not_called()
+    mocks["call_llm"].assert_called_once()  # drafting agent ran exactly once
+    mocks["call_llm_json"].assert_called_once()  # strategist ran exactly once, not re-planning
 
 
-def test_retries_on_low_faithfulness_then_stops_once_it_passes():
+def test_retries_send_strategist_back_to_replan_until_it_passes():
     scores = iter([0.3, 0.3, 0.9])
     with ExitStack() as stack:
         mocks = apply_patches(stack, score_faithfulness=lambda *a, **k: next(scores))
@@ -74,8 +88,8 @@ def test_retries_on_low_faithfulness_then_stops_once_it_passes():
 
     assert result["retries"] == 2
     assert result["faithfulness_score"] == 0.9
-    assert mocks["call_llm"].call_count == 3  # 1 initial generate + 2 retries
-    assert mocks["call_llm_json"].call_count == 2  # 1 reformulation per retry
+    assert mocks["call_llm"].call_count == 3  # drafting agent: 1 initial + 2 retries
+    assert mocks["call_llm_json"].call_count == 3  # strategist: 1 initial + 2 re-plans
 
 
 def test_stops_at_max_retries_even_if_never_faithful():
@@ -85,6 +99,45 @@ def test_stops_at_max_retries_even_if_never_faithful():
 
     assert result["retries"] == DEFAULT_MAX_RETRIES
     assert mocks["call_llm"].call_count == DEFAULT_MAX_RETRIES + 1  # doesn't loop forever
+
+
+def test_multi_hop_sub_queries_are_merged_and_deduped():
+    chunk_a = {**SAMPLE_CHUNKS[0], "score": 0.6}
+    chunk_b = {
+        "score": 0.8,
+        "document_id": "doc-1",
+        "filename": "handbook.md",
+        "text": "Leave rises to 30 days after 5 years.",
+        "page": None,
+        "chunk_index": 1,
+    }
+    duplicate_of_a_higher_score = {
+        **chunk_a,
+        "score": 0.95,
+    }  # same (document_id, chunk_index) as chunk_a
+
+    def fake_search(query, top_k=None, document_id=None):
+        return {
+            "leave policy": [chunk_a, chunk_b],
+            "leave increase over time": [duplicate_of_a_higher_score],
+        }[query]
+
+    with ExitStack() as stack:
+        mocks = apply_patches(
+            stack,
+            search=fake_search,
+            call_llm_json=lambda *a, **k: {
+                "sub_queries": ["leave policy", "leave increase over time"],
+                "top_k": 4,
+                "reasoning": "comparison across two sub-topics",
+            },
+        )
+        result = answer_question_agentic("How does leave work and how does it change over time?")
+
+    # 3 chunks retrieved across 2 sub-queries, but chunk_a and its duplicate share a
+    # (document_id, chunk_index) key — deduped down to 2, keeping the higher score.
+    assert len(result["contexts"]) == 2
+    assert mocks["search"].call_count == 2
 
 
 def test_memory_skipped_when_no_user_id():

@@ -1,23 +1,25 @@
-"""Corrective-RAG graph: retrieve -> generate -> critique -> [reformulate
-+ retrieve again if ungrounded, capped] -> end.
+"""Two-agent corrective-RAG graph: a Retrieval Strategist decides how to
+search, a Drafting Agent writes the answer, and a critique gate routes
+back to the Strategist (not just a query rewrite) when the draft isn't
+well-grounded.
 
-This reuses the existing single-pass primitives (vector_store.search,
-llm_client.call_llm, rag_chain.build_context/SYSTEM_PROMPT) rather than
-duplicating them — the difference from rag_chain.answer_question is that
-retrieval and generation are separate graph nodes with a critique gate in
-between, so the graph can loop back and try a reformulated query when the
-generated answer isn't well-grounded in what was retrieved. This is the
-"Corrective RAG" / "Self-RAG" pattern: instead of trusting the first
-retrieval, the system's own faithfulness judge (evaluation.py's existing
-score_faithfulness, already used for offline evaluation) gates whether the
-answer is good enough to return, live, in the request path.
+    recall_memory -> strategize -> retrieve -> draft -> critique
+                          ^                                  |
+                          '------ retry, with feedback -------'
 
-A within-run LangGraph MemorySaver checkpointer is used only so the graph
-can be invoked identically from tests and production; the app's actual
-cross-session memory (recalling past exchanges from a *different*
-session_id) is handled separately by memory_store.py, keyed by user_id,
-since LangGraph's own thread-scoped checkpointing doesn't do semantic
-recall across unrelated threads.
+This is a genuine two-role split, not a renamed single function: the
+Strategist (strategize_node) never sees the retrieved context or writes
+prose — it only decides sub_queries (supporting real multi-hop
+decomposition for comparison-style questions) and top_k. The Drafter
+(draft_node) never decides search strategy — it only writes from
+whatever evidence retrieve_node assembled. They communicate solely
+through RagAgentState, not by calling each other directly.
+
+Reuses existing single-pass primitives (vector_store.search,
+rag_chain.build_context/SYSTEM_PROMPT) rather than duplicating them — see
+docs/ARCHITECTURE.md for the full design rationale, including why
+cross-session memory (memory_store.py) is deliberately separate from
+LangGraph's own thread-scoped checkpointing.
 """
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -39,15 +41,40 @@ NO_DOCUMENTS_ANSWER = (
     "Upload a document first via POST /documents."
 )
 
-REFORMULATE_PROMPT = (
-    "The following search query did not retrieve context that supports a "
-    "faithful answer to the user's actual question.\n\n"
-    "Original question: {original_question}\n"
-    "Query tried: {question}\n\n"
-    "Write ONE improved search query — broader or rephrased — more likely "
-    "to retrieve context that actually supports answering the original "
-    'question. Respond as JSON: {{"query": "..."}}'
+STRATEGIST_SYSTEM_PROMPT = (
+    "You are the Retrieval Strategist for a knowledge-base assistant. You do not write "
+    "answers — a separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
+    "Decide:\n"
+    "1. One or more search queries to run. Use 2-3 only for genuine multi-hop questions "
+    "(e.g. comparing two distinct things, which need separate searches); otherwise one "
+    "focused query is better than several vague ones.\n"
+    "2. How many chunks to retrieve per query (top_k, between 3 and 8).\n\n"
+    'Respond as JSON: {"sub_queries": ["..."], "top_k": <int>, "reasoning": "<one sentence>"}'
 )
+
+
+def _build_strategize_prompt(state: RagAgentState) -> str:
+    parts = [f"QUESTION: {state['original_question']}"]
+
+    if state.get("critique_feedback"):
+        parts.append(
+            f"\nA previous attempt with different search queries produced an answer that "
+            f"wasn't well-grounded: {state['critique_feedback']} "
+            "Change strategy — broaden, decompose, or rephrase, don't repeat the same queries."
+        )
+
+    if state.get("requested_top_k"):
+        parts.append(
+            f"\nThe caller requested top_k={state['requested_top_k']}; "
+            "use that unless you have good reason not to."
+        )
+
+    remembered = state.get("remembered_context") or []
+    if remembered:
+        mem_text = "\n".join(f"- Q: {m['question']} / A: {m['answer']}" for m in remembered)
+        parts.append(f"\nPast exchanges with this user, for context only:\n{mem_text}")
+
+    return "\n".join(parts)
 
 
 def recall_memory_node(state: RagAgentState) -> dict:
@@ -61,15 +88,48 @@ def recall_memory_node(state: RagAgentState) -> dict:
     return {"remembered_context": remembered}
 
 
+def strategize_node(state: RagAgentState) -> dict:
+    is_retry = bool(state.get("critique_feedback"))
+    prompt = _build_strategize_prompt(state)
+    try:
+        result = call_llm_json(STRATEGIST_SYSTEM_PROMPT, prompt)
+        sub_queries = [q for q in result.get("sub_queries", []) if q and q.strip()]
+        sub_queries = sub_queries or [state["original_question"]]
+        top_k = int(result.get("top_k") or state.get("requested_top_k") or 4)
+        reasoning = result.get("reasoning", "")
+    except Exception:
+        sub_queries = [state["original_question"]]
+        top_k = state.get("requested_top_k") or 4
+        reasoning = ""
+
+    updates = {"sub_queries": sub_queries, "top_k": top_k, "strategist_reasoning": reasoning}
+    if is_retry:
+        updates["retry_count"] = state.get("retry_count", 0) + 1
+    return updates
+
+
+def _merge_and_dedupe(chunks: list[dict]) -> list[dict]:
+    """Sub-queries can retrieve overlapping chunks; keep each chunk's
+    highest score across queries rather than duplicating or discarding."""
+    best: dict[tuple, dict] = {}
+    for c in chunks:
+        key = (c["document_id"], c["chunk_index"])
+        if key not in best or c["score"] > best[key]["score"]:
+            best[key] = c
+    return sorted(best.values(), key=lambda c: c["score"], reverse=True)
+
+
 def retrieve_node(state: RagAgentState) -> dict:
-    chunks = search(
-        state["question"], top_k=state.get("top_k"), document_id=state.get("document_id")
-    )
+    sub_queries = state.get("sub_queries") or [state["original_question"]]
+    all_chunks = []
+    for q in sub_queries:
+        all_chunks.extend(search(q, top_k=state.get("top_k"), document_id=state.get("document_id")))
+    chunks = _merge_and_dedupe(all_chunks)
     return {"chunks": chunks, "no_documents": not chunks}
 
 
 def _route_after_retrieve(state: RagAgentState) -> str:
-    return "no_documents" if state.get("no_documents") else "generate"
+    return "no_documents" if state.get("no_documents") else "draft"
 
 
 def no_documents_node(state: RagAgentState) -> dict:
@@ -81,7 +141,10 @@ def no_documents_node(state: RagAgentState) -> dict:
     }
 
 
-def generate_node(state: RagAgentState) -> dict:
+def draft_node(state: RagAgentState) -> dict:
+    """The Drafting Agent: writes the answer from whatever the Strategist's
+    plan retrieved. Deliberately has no say over search strategy — it
+    only sees the assembled evidence, not the sub_queries that produced it."""
     chunks = state["chunks"]
     context = build_context(chunks)
 
@@ -132,32 +195,20 @@ def generate_node(state: RagAgentState) -> dict:
 def critique_node(state: RagAgentState) -> dict:
     contexts = [c["text"] for c in state["chunks"]]
     score = score_faithfulness(state["answer"], contexts)
-    return {"faithfulness_score": score}
+    feedback = (
+        ""
+        if score >= MIN_FAITHFULNESS
+        else f"scored {score:.2f}/1.0 on faithfulness — not well supported by the retrieved context"
+    )
+    return {"faithfulness_score": score, "critique_feedback": feedback}
 
 
 def _should_retry(state: RagAgentState) -> str:
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", DEFAULT_MAX_RETRIES)
     if state.get("faithfulness_score", 1.0) < MIN_FAITHFULNESS and retry_count < max_retries:
-        return "reformulate"
+        return "strategize"
     return "remember"
-
-
-def reformulate_node(state: RagAgentState) -> dict:
-    prompt = REFORMULATE_PROMPT.format(
-        original_question=state["original_question"], question=state["question"]
-    )
-    try:
-        result = call_llm_json("You rewrite search queries.", prompt)
-        new_query = result.get("query") or state["original_question"]
-    except Exception:
-        new_query = state["original_question"]
-
-    return {
-        "question": new_query,
-        "top_k": state.get("top_k", 4) + 2,  # broaden retrieval on retry, not just reword
-        "retry_count": state.get("retry_count", 0) + 1,
-    }
 
 
 def remember_node(state: RagAgentState) -> dict:
@@ -178,24 +229,24 @@ def remember_node(state: RagAgentState) -> dict:
 def build_graph():
     graph = StateGraph(RagAgentState)
     graph.add_node("recall_memory", recall_memory_node)
+    graph.add_node("strategize", strategize_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("no_documents", no_documents_node)
-    graph.add_node("generate", generate_node)
+    graph.add_node("draft", draft_node)
     graph.add_node("critique", critique_node)
-    graph.add_node("reformulate", reformulate_node)
     graph.add_node("remember", remember_node)
 
     graph.set_entry_point("recall_memory")
-    graph.add_edge("recall_memory", "retrieve")
+    graph.add_edge("recall_memory", "strategize")
+    graph.add_edge("strategize", "retrieve")
     graph.add_conditional_edges(
-        "retrieve", _route_after_retrieve, {"no_documents": "no_documents", "generate": "generate"}
+        "retrieve", _route_after_retrieve, {"no_documents": "no_documents", "draft": "draft"}
     )
     graph.add_edge("no_documents", END)
-    graph.add_edge("generate", "critique")
+    graph.add_edge("draft", "critique")
     graph.add_conditional_edges(
-        "critique", _should_retry, {"reformulate": "reformulate", "remember": "remember"}
+        "critique", _should_retry, {"strategize": "strategize", "remember": "remember"}
     )
-    graph.add_edge("reformulate", "retrieve")
     graph.add_edge("remember", END)
 
     return graph.compile(checkpointer=MemorySaver())
@@ -220,16 +271,15 @@ def answer_question_agentic(
     session_id: str = "",
 ) -> dict:
     """Drop-in replacement for rag_chain.answer_question with the same
-    return shape, plus faithfulness_score/retries for callers that want to
-    show the corrective loop's behaviour (see routers/chat.py)."""
+    return shape, plus faithfulness_score/retries/sub_queries for callers
+    that want to show the two-agent loop's behaviour (see routers/chat.py)."""
     import time
 
     start = time.perf_counter()
     graph = get_graph()
     initial_state: RagAgentState = {
         "original_question": question,
-        "question": question,
-        "top_k": top_k or 4,
+        "requested_top_k": top_k,
         "document_id": document_id,
         "history": history or [],
         "user_id": user_id,
@@ -253,4 +303,6 @@ def answer_question_agentic(
         "faithfulness_score": result.get("faithfulness_score"),
         "retries": result.get("retry_count", 0),
         "used_memory": bool(result.get("remembered_context")),
+        "sub_queries": result.get("sub_queries", []),
+        "strategist_reasoning": result.get("strategist_reasoning", ""),
     }

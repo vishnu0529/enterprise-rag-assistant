@@ -110,6 +110,14 @@ for msg in st.session_state.messages:
         st.markdown(f'<div class="chat-u">{msg["content"]}</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="chat-a">{msg["content"]}</div>', unsafe_allow_html=True)
+        if msg.get("sub_queries"):
+            queries = ", ".join(f"“{q}”" for q in msg["sub_queries"])
+            with st.expander(
+                f"🧭 Retrieval Strategist's plan: {len(msg['sub_queries'])} quer{'y' if len(msg['sub_queries']) == 1 else 'ies'}"
+            ):
+                st.markdown(f"**Searched for:** {queries}")
+                if msg.get("strategist_reasoning"):
+                    st.caption(msg["strategist_reasoning"])
         if msg.get("citations"):
             with st.expander(f"📎 {len(msg['citations'])} source(s)"):
                 for c in msg["citations"]:
@@ -126,9 +134,9 @@ for msg in st.session_state.messages:
                 f"{msg['prompt_tokens']}+{msg['completion_tokens']} tokens"
             )
         if msg.get("faithfulness_score") is not None:
-            extras = [f"🧭 faithfulness {msg['faithfulness_score']:.2f}"]
+            extras = [f"✅ faithfulness {msg['faithfulness_score']:.2f}"]
             if msg.get("retries"):
-                extras.append(f"🔁 {msg['retries']} reformulation(s)")
+                extras.append(f"🔁 Strategist re-planned {msg['retries']}x")
             if msg.get("used_memory"):
                 extras.append("🧠 recalled a past session")
             st.caption(" · ".join(extras))
@@ -159,6 +167,8 @@ if question:
                 "faithfulness_score": data.get("faithfulness_score"),
                 "retries": data.get("retries", 0),
                 "used_memory": data.get("used_memory", False),
+                "sub_queries": data.get("sub_queries", []),
+                "strategist_reasoning": data.get("strategist_reasoning", ""),
             }
         )
     except requests.RequestException as exc:
