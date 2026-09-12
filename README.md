@@ -75,7 +75,7 @@ answer) → critique → (send the Strategist back to re-plan if ungrounded, cap
 | Agent orchestration | LangGraph — two agent roles (Retrieval Strategist, Drafting Agent) plus a faithfulness-gated critique node that routes retries back to the Strategist |
 | RAG primitives | LangChain (text splitting), custom retrieval/generation chain reused by the graph |
 | Vector store | Qdrant (embedded locally, real service via Docker) — separate collections for document chunks and cross-session user memory |
-| Embeddings | `BAAI/bge-small-en-v1.5` (local, free, no API cost) |
+| Embeddings | `BAAI/bge-small-en-v1.5` via `fastembed`/ONNX Runtime (local, free, no API cost, no torch) |
 | LLMs | Google Gemini / Anthropic Claude |
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
