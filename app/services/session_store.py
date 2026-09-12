@@ -3,11 +3,13 @@ from sqlmodel import Session, select
 from app.models.schemas import ChatMessage, ChatSession
 
 
-def get_or_create_session(session: Session, session_id: str) -> ChatSession:
+def get_or_create_session(
+    session: Session, session_id: str, user_id: str | None = None
+) -> ChatSession:
     existing = session.get(ChatSession, session_id)
     if existing:
         return existing
-    new_session = ChatSession(id=session_id)
+    new_session = ChatSession(id=session_id, user_id=user_id)
     session.add(new_session)
     session.commit()
     session.refresh(new_session)

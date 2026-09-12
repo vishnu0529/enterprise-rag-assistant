@@ -15,6 +15,7 @@ class Document(SQLModel, table=True):
 
 class ChatSession(SQLModel, table=True):
     id: str = Field(primary_key=True)
+    user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -56,6 +57,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     document_id: str | None = None
     top_k: int | None = None
+    user_id: str | None = None  # optional: enables cross-session memory recall
 
 
 class ChatResponse(BaseModel):
@@ -65,3 +67,6 @@ class ChatResponse(BaseModel):
     latency_ms: float
     prompt_tokens: int
     completion_tokens: int
+    faithfulness_score: float | None = None  # None only for the no-documents short-circuit
+    retries: int = 0  # how many times the corrective loop reformulated and re-retrieved
+    used_memory: bool = False  # whether a past session's exchange was recalled into context

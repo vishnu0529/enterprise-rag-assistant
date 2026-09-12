@@ -37,6 +37,8 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "user_id" not in st.session_state:
+    st.session_state.user_id = ""
 
 with st.sidebar:
     st.markdown("### Settings")
@@ -71,10 +73,19 @@ with st.sidebar:
             st.error(resp.text)
 
     st.divider()
+    st.markdown("### Memory")
+    st.session_state.user_id = st.text_input(
+        "User ID (optional)",
+        value=st.session_state.user_id,
+        help="Set this to recall relevant exchanges from your earlier sessions, "
+        "even after starting a new session below. Leave blank for no cross-session memory.",
+    )
+
+    st.divider()
     if st.button("New session", use_container_width=True):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
-        st.rerun()
+        st.rerun()  # user_id is intentionally NOT reset — that's what makes memory cross-session
 
     st.divider()
     st.markdown("[GitHub](https://github.com/vishnu0529/enterprise-rag-assistant) · v0.1")
@@ -114,6 +125,13 @@ for msg in st.session_state.messages:
                 f"⏱ {msg['latency_ms']:.0f}ms · "
                 f"{msg['prompt_tokens']}+{msg['completion_tokens']} tokens"
             )
+        if msg.get("faithfulness_score") is not None:
+            extras = [f"🧭 faithfulness {msg['faithfulness_score']:.2f}"]
+            if msg.get("retries"):
+                extras.append(f"🔁 {msg['retries']} reformulation(s)")
+            if msg.get("used_memory"):
+                extras.append("🧠 recalled a past session")
+            st.caption(" · ".join(extras))
 
 question = st.chat_input("Ask a question about your documents...")
 if question:
@@ -121,7 +139,11 @@ if question:
     try:
         resp = requests.post(
             f"{api_base}/chat",
-            json={"question": question, "session_id": st.session_state.session_id},
+            json={
+                "question": question,
+                "session_id": st.session_state.session_id,
+                "user_id": st.session_state.user_id or None,
+            },
             timeout=60,
         )
         resp.raise_for_status()
@@ -134,6 +156,9 @@ if question:
                 "latency_ms": data["latency_ms"],
                 "prompt_tokens": data["prompt_tokens"],
                 "completion_tokens": data["completion_tokens"],
+                "faithfulness_score": data.get("faithfulness_score"),
+                "retries": data.get("retries", 0),
+                "used_memory": data.get("used_memory", False),
             }
         )
     except requests.RequestException as exc:
