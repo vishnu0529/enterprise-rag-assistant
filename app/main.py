@@ -4,18 +4,19 @@ from fastapi import FastAPI
 
 from app.core.db import init_db
 from app.routers import chat, documents, evaluate
-from app.services.embeddings import get_embedder
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # Loads (and on a fresh instance, downloads) the embedding model now,
-    # not on the first real request — on a cold PaaS instance, doing this
-    # lazily on the first /chat or /documents call can take long enough to
-    # exceed the platform's proxy timeout and return a 502 while the
-    # container is still alive and working in the background.
-    get_embedder()
+    # NOT eager-loading the embedder here: on Render's free tier (512MB),
+    # loading torch + sentence-transformers at startup was observed to OOM
+    # before the app could finish booting at all (see git history / commit
+    # message on the revert of this line). Lazy loading on first use is a
+    # real tradeoff — it risks a slow/failed first request instead — but an
+    # app that can't start is strictly worse than one that's slow once.
+    # docs/DEPLOYMENT.md documents the underlying memory constraint and the
+    # real fix (a lighter embedding backend or a bigger instance).
     yield
 
 
