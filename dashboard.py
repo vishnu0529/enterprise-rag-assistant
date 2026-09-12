@@ -125,6 +125,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.info(
+    "⏳ The backend runs on Render's free tier, which sleeps after ~15 minutes of "
+    "inactivity. If your first request fails or times out, that's expected — "
+    "wait ~30-60s for it to wake up, then try again.",
+    icon="⏳",
+)
+
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(f'<div class="chat-u">{msg["content"]}</div>', unsafe_allow_html=True)
@@ -195,7 +202,18 @@ if question:
             }
         )
     except requests.RequestException as exc:
-        st.session_state.messages.append(
-            {"role": "assistant", "content": f"Error contacting API: {exc}"}
+        cold_start_status = (
+            isinstance(exc, requests.exceptions.HTTPError)
+            and exc.response is not None
+            and exc.response.status_code in (502, 503, 504)
         )
+        is_cold_start = (
+            isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError))
+            or cold_start_status
+        )
+        if is_cold_start:
+            content = "⏳ The backend looks like it's still waking up from Render's free-tier sleep. Wait ~30-60s and try again."
+        else:
+            content = f"Error contacting API: {exc}"
+        st.session_state.messages.append({"role": "assistant", "content": content})
     st.rerun()
