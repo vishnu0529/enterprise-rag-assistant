@@ -22,6 +22,8 @@ cross-session memory (memory_store.py) is deliberately separate from
 LangGraph's own thread-scoped checkpointing.
 """
 
+import logging
+
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
@@ -32,6 +34,8 @@ from app.services.llm_client import call_llm, call_llm_json
 from app.services.memory_store import recall_relevant_memory, remember_exchange
 from app.services.rag_chain import SYSTEM_PROMPT, build_context
 from app.services.vector_store import search
+
+logger = logging.getLogger(__name__)
 
 MIN_FAITHFULNESS = 0.7
 DEFAULT_MAX_RETRIES = 2
@@ -177,6 +181,11 @@ def draft_node(state: RagAgentState) -> dict:
         completion_tokens = result.completion_tokens
         llm_error = False
     except Exception as e:
+        # Full traceback goes to logs (server-side only) so a real cause
+        # (bad key, quota, network) is diagnosable — the API response
+        # deliberately only exposes the exception type, not its message,
+        # in case the message itself contains anything sensitive.
+        logger.exception("draft_node's call_llm failed")
         answer = (
             f"Sorry, couldn't generate an answer right now ({type(e).__name__}). Try again soon."
         )
