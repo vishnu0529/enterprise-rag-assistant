@@ -164,3 +164,25 @@ def test_memory_recalled_and_remembered_when_user_id_given():
     _, kwargs = mocks["remember_exchange"].call_args
     assert kwargs["user_id"] == "user-42"
     assert kwargs["session_id"] == "session-1"
+
+
+def _raise_call_llm(*a, **k):
+    raise RuntimeError("simulated quota/network failure")
+
+
+def test_llm_failure_in_draft_returns_clean_message_without_retry_or_memory_write():
+    """Regression test: draft_node's call_llm previously had no exception
+    handling at all (unlike every other LLM call in the graph), so a real
+    quota/network error surfaced as a raw 500 all the way through the API —
+    caught via manual testing against the live Render deployment, not by
+    this suite, since it existed before this test did."""
+    with ExitStack() as stack:
+        mocks = apply_patches(stack, call_llm=_raise_call_llm)
+        result = answer_question_agentic("How many annual leave days?", user_id="user-42")
+
+    assert "RuntimeError" in result["answer"]
+    assert result["citations"] == []
+    assert result["retries"] == 0  # didn't burn retries on a failure retrying can't fix
+    assert result["faithfulness_score"] is None  # critique never called score_faithfulness
+    assert mocks["call_llm"].call_count == 1  # failed once, didn't retry
+    mocks["remember_exchange"].assert_not_called()  # didn't pollute memory with an error message

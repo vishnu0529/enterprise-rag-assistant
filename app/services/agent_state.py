@@ -35,9 +35,11 @@ class RagAgentState(TypedDict, total=False):
     citations: list[Citation]
     prompt_tokens: int
     completion_tokens: int
+    llm_error: bool  # True if the Drafting Agent's LLM call itself raised (e.g. quota/network) —
+    # signals critique/retry/remember to skip rather than retry a failure retrying can't fix
 
     # critique + loop control
-    faithfulness_score: float
+    faithfulness_score: float | None
     critique_feedback: str
     retry_count: int
     max_retries: int
