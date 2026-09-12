@@ -4,12 +4,13 @@ from app.models.schemas import Citation
 
 
 class RagAgentState(TypedDict, total=False):
-    """Shared state threaded through the corrective-RAG graph.
+    """Shared state threaded through the two-agent corrective-RAG graph.
 
-    One instance flows through retrieve -> generate -> critique -> [loop
-    back via reformulate, or end]. `question` is mutated on each
-    reformulation; `original_question` is kept fixed so nodes can always
-    refer back to what the user actually asked.
+    Two distinct agent roles collaborate via this state: the Retrieval
+    Strategist (strategize_node) decides sub_queries/top_k, and the
+    Drafting Agent (draft_node) writes the answer from whatever the
+    Strategist's plan retrieved. Neither node knows the other's prompt —
+    they only communicate through these fields.
     """
 
     # inputs (fixed for the whole run)
@@ -18,14 +19,18 @@ class RagAgentState(TypedDict, total=False):
     history: list[dict]
     user_id: str | None
     session_id: str
+    requested_top_k: int | None  # caller-supplied hint, the Strategist may honor or override
 
-    # mutated per retrieval attempt
-    question: str
+    # Retrieval Strategist output, consumed by retrieve_node
+    sub_queries: list[str]
     top_k: int
+    strategist_reasoning: str
+
+    # retrieval output
     chunks: list[dict]
     no_documents: bool
 
-    # generation output (cumulative across retries)
+    # Drafting Agent output (cumulative across retries)
     answer: str
     citations: list[Citation]
     prompt_tokens: int
@@ -33,6 +38,7 @@ class RagAgentState(TypedDict, total=False):
 
     # critique + loop control
     faithfulness_score: float
+    critique_feedback: str
     retry_count: int
     max_retries: int
 

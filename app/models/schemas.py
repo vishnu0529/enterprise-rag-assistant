@@ -68,5 +68,7 @@ class ChatResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     faithfulness_score: float | None = None  # None only for the no-documents short-circuit
-    retries: int = 0  # how many times the corrective loop reformulated and re-retrieved
+    retries: int = 0  # how many times the critique sent the Strategist back to re-plan
     used_memory: bool = False  # whether a past session's exchange was recalled into context
+    sub_queries: list[str] = []  # the Retrieval Strategist's actual search plan for this answer
+    strategist_reasoning: str = ""  # the Strategist's one-sentence rationale for that plan
