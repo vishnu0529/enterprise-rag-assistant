@@ -52,7 +52,7 @@ flowchart TD
 | Component | File(s) | Responsibility |
 |---|---|---|
 | Ingestion | `app/services/ingestion.py` | Load PDF (page-tracked)/Markdown/txt, chunk with overlap |
-| Embeddings | `app/services/embeddings.py` | Local `BAAI/bge-small-en-v1.5` via `sentence-transformers` — no per-call API cost |
+| Embeddings | `app/services/embeddings.py` | Local `BAAI/bge-small-en-v1.5` via `fastembed` (ONNX Runtime, no torch) — no per-call API cost, and light enough to run on Render's free tier |
 | Vector store | `app/services/vector_store.py` | Qdrant: embedded local mode (dev) or a real Qdrant service via `QDRANT_URL` (prod) |
 | RAG chain (primitives) | `app/services/rag_chain.py` | `build_context`/`SYSTEM_PROMPT` reused by the Drafting Agent; `answer_question` (single-pass) kept for its own tests, no longer the `/chat` path |
 | Two-agent graph | `app/services/rag_graph.py`, `app/services/agent_state.py` | LangGraph, two distinct agent roles: **Retrieval Strategist** (`strategize_node`) decides sub-queries/top_k, **Drafting Agent** (`draft_node`) writes the answer from whatever was retrieved. Neither sees the other's prompt — they only share `RagAgentState`. Flow: recall memory → strategize → retrieve (fan out + dedupe) → draft → critique → (send Strategist back to re-plan, capped) → remember. This is the actual `/chat` and `/evaluate` path |
