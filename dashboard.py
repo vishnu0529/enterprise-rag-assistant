@@ -126,7 +126,7 @@ st.markdown(
 )
 
 st.info(
-    "⏳ The backend runs on Render's free tier, which sleeps after ~15 minutes of "
+    "The backend runs on Render's free tier, which sleeps after ~15 minutes of "
     "inactivity. If your first request fails or times out, that's expected — "
     "wait ~30-60s for it to wake up, then try again.",
     icon="⏳",
