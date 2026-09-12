@@ -3,12 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
+from app.core.auth import require_api_key
 from app.core.db import get_session
 from app.models.schemas import ChatRequest, ChatResponse, Document
 from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic
 from app.services.session_store import add_message, get_history, get_or_create_session
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(tags=["chat"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/chat", response_model=ChatResponse)

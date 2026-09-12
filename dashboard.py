@@ -5,6 +5,20 @@ import streamlit as st
 
 API_BASE = "https://enterprise-rag-assistant-53ke.onrender.com"
 
+# Read from Streamlit Cloud's Secrets, which are server-side only — this
+# request happens from Streamlit's Python backend to the FastAPI backend,
+# never from the visitor's browser, so the key is never exposed to whoever
+# is viewing the public dashboard, only whoever has the actual secret.
+try:
+    _API_KEY = st.secrets.get("API_KEY", "")
+except Exception:
+    _API_KEY = ""  # no secrets.toml at all (e.g. local dev without one) — fine, gate is a no-op
+
+
+def _auth_headers() -> dict:
+    return {"X-API-Key": _API_KEY} if _API_KEY else {}
+
+
 st.set_page_config(
     page_title="Enterprise Knowledge Assistant",
     page_icon="📚",
@@ -49,7 +63,7 @@ with st.sidebar:
         # Render's free tier spins the backend down after inactivity and
         # cold-starts in ~30-60s on the next request — a short timeout here
         # would misreport a cold start as "API unreachable".
-        docs = requests.get(f"{api_base}/documents", timeout=70).json()
+        docs = requests.get(f"{api_base}/documents", headers=_auth_headers(), timeout=70).json()
     except requests.RequestException:
         docs = None
 
@@ -69,6 +83,7 @@ with st.sidebar:
             resp = requests.post(
                 f"{api_base}/documents",
                 files={"file": (uploaded.name, uploaded.getvalue())},
+                headers=_auth_headers(),
                 timeout=120,
             )
         if resp.ok:
@@ -159,6 +174,7 @@ if question:
             },
             # Generous: a cold Render start (~30-60s) can stack with up to 3
             # strategize/draft/critique rounds if the corrective loop retries.
+            headers=_auth_headers(),
             timeout=120,
         )
         resp.raise_for_status()

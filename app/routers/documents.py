@@ -5,12 +5,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
 
+from app.core.auth import require_api_key
 from app.core.db import get_session
 from app.models.schemas import Document, DocumentOut, IngestResponse
 from app.services.ingestion import SUPPORTED_EXTENSIONS, chunk_document, load_text
 from app.services.vector_store import delete_document, upsert_chunks
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(require_api_key)])
 
 UPLOAD_DIR = Path("uploaded_docs")
 UPLOAD_DIR.mkdir(exist_ok=True)

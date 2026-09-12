@@ -4,13 +4,15 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 > Production-style Retrieval-Augmented Generation: document ingestion, cited
 > chat over your own documents, and a rigorous evaluation suite, not just
 > another RAG demo. Most portfolios stop at retrieval + generation; this one
 > also measures whether the answers are actually good.
+
+**Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds `sample_docs/company_handbook.md`, not anything sensitive).
 
 Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md)
 
@@ -184,7 +186,7 @@ rather than partially built everywhere:
 - **Hybrid search** (BM25 + vector) and **reranking**
 - **Parent-document retrieval**
 - **MCP tool support**
-- **Live cloud deployment** (Railway/Render, matching `ai-resume-matcher`) and a portfolio domain
+- **A portfolio domain** for the live demo (currently on Render/Streamlit Cloud's default subdomains)
 
 ## License
 

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
+    # API access
+    # Shared-secret gate for /documents, /chat, /evaluate — see app/core/auth.py.
+    # Empty (the local-dev default) disables the gate entirely.
+    API_KEY: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

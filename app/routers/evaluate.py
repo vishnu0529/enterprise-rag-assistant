@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.core.auth import require_api_key
 from app.services.evaluation import evaluate_question
 
-router = APIRouter(tags=["evaluation"])
+router = APIRouter(tags=["evaluation"], dependencies=[Depends(require_api_key)])
 
 
 class EvaluateRequest(BaseModel):
