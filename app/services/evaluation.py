@@ -12,7 +12,10 @@ import numpy as np
 
 from app.services.embeddings import embed_texts
 from app.services.llm_client import call_llm_json
-from app.services.rag_chain import answer_question
+
+# Deferred import: rag_graph imports score_faithfulness from this module, so
+# importing rag_graph at module level here would create a circular import.
+# See evaluate_question() below.
 
 
 @dataclass
@@ -133,13 +136,25 @@ def score_context_recall(ground_truth: str, contexts: list[str]) -> float:
 def evaluate_question(
     question: str, ground_truth: str | None = None, top_k: int | None = None
 ) -> EvalResult:
-    result = answer_question(question, top_k=top_k)
+    # Evaluation reuses the exact same path /chat uses (the corrective-RAG
+    # graph), not a separate simplified path — so these metrics score real
+    # production behaviour, including any reformulate-and-retry the graph did.
+    from app.services.rag_graph import answer_question_agentic
+
+    result = answer_question_agentic(question, top_k=top_k)
     contexts = result["contexts"]
+
+    # The graph's critique node already scored faithfulness on this exact
+    # (answer, contexts) pair — reuse it instead of paying for a second,
+    # redundant LLM-judge call.
+    faithfulness = result.get("faithfulness_score")
+    if faithfulness is None:
+        faithfulness = score_faithfulness(result["answer"], contexts)
 
     return EvalResult(
         question=question,
         answer=result["answer"],
-        faithfulness=score_faithfulness(result["answer"], contexts),
+        faithfulness=faithfulness,
         answer_relevancy=score_answer_relevancy(question, result["answer"]),
         context_precision=score_context_precision(question, contexts),
         context_recall=score_context_recall(ground_truth, contexts) if ground_truth else 0.0,
