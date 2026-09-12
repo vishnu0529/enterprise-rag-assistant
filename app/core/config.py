@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # LLM
     LLM_PROVIDER: str = "google"
-    LLM_MODEL: str = "gemini-2.0-flash"
+    LLM_MODEL: str = "gemini-3.6-flash"
     GOOGLE_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
