@@ -58,6 +58,15 @@ def remove_document(document_id: str, session: Session = Depends(get_session)):
     if not doc:
         raise HTTPException(404, "Document not found")
     delete_document(document_id)
+
+    # ingest_document saves the raw upload to UPLOAD_DIR/{document_id}{suffix}
+    # but this wasn't being cleaned up here — the vector-store chunks and DB
+    # row were removed, but the original file (with any sensitive content it
+    # contained) stayed on disk indefinitely.
+    suffix = Path(doc.filename).suffix.lower()
+    raw_path = UPLOAD_DIR / f"{document_id}{suffix}"
+    raw_path.unlink(missing_ok=True)
+
     session.delete(doc)
     session.commit()
     return {"deleted": document_id}
