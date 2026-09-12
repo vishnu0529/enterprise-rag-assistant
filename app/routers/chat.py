@@ -1,11 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import get_session
-from app.models.schemas import ChatRequest, ChatResponse
-from app.services.rag_graph import answer_question_agentic
+from app.models.schemas import ChatRequest, ChatResponse, Document
+from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic
 from app.services.session_store import add_message, get_history, get_or_create_session
 
 router = APIRouter(tags=["chat"])
@@ -16,6 +16,21 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
     session_id = request.session_id or str(uuid.uuid4())
     get_or_create_session(session, session_id, user_id=request.user_id)
     history = get_history(session, session_id)
+
+    # Cheap DB check before spending a Strategist LLM call on a corpus
+    # that's empty anyway — the graph would reach the same no_documents
+    # short-circuit itself, just after retrieval instead of before it.
+    if session.exec(select(Document)).first() is None:
+        add_message(session, session_id, "user", request.question)
+        add_message(session, session_id, "assistant", NO_DOCUMENTS_ANSWER)
+        return ChatResponse(
+            session_id=session_id,
+            answer=NO_DOCUMENTS_ANSWER,
+            citations=[],
+            latency_ms=0.0,
+            prompt_tokens=0,
+            completion_tokens=0,
+        )
 
     result = answer_question_agentic(
         request.question,
