@@ -6,6 +6,7 @@ from app.services.rag_graph import (
     DEFAULT_MAX_RETRIES,
     NO_DOCUMENTS_ANSWER,
     answer_question_agentic,
+    resume_approval,
 )
 
 SAMPLE_CHUNKS = [
@@ -250,3 +251,97 @@ def test_llm_failure_in_draft_returns_clean_message_without_retry_or_memory_writ
     assert result["faithfulness_score"] is None  # critique never called score_faithfulness
     assert mocks["call_llm"].call_count == 1  # failed once, didn't retry
     mocks["remember_exchange"].assert_not_called()  # didn't pollute memory with an error message
+
+
+PRICEY_LLM_RESULT = LLMResult(
+    text="The day rate for a Senior Consultant is £1,050. [Source 1]",
+    prompt_tokens=100,
+    completion_tokens=15,
+)
+
+
+def test_approval_not_required_by_default_even_with_a_price_in_the_answer():
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: PRICEY_LLM_RESULT)
+        result = answer_question_agentic(
+            "What is the day rate?", session_id="test-approval-default"
+        )
+
+    assert result["pending_approval"] is False
+    assert result["approval_status"] == "not_required"
+    assert result["answer"] == PRICEY_LLM_RESULT.text
+
+
+def test_approval_required_pauses_on_a_priced_answer():
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: PRICEY_LLM_RESULT)
+        result = answer_question_agentic(
+            "What is the day rate?", session_id="test-approval-pause", require_approval=True
+        )
+
+    assert result["pending_approval"] is True
+    assert result["answer"] is None  # not released yet
+    assert result["draft_answer"] == PRICEY_LLM_RESULT.text
+    assert "monetary figure" in result["approval_reason"]
+
+
+def test_approval_required_does_not_pause_without_a_price():
+    with ExitStack() as stack:
+        apply_patches(stack)  # default FAKE_LLM_RESULT has no £ figure
+        result = answer_question_agentic(
+            "How many annual leave days?",
+            session_id="test-approval-no-price",
+            require_approval=True,
+        )
+
+    assert result["pending_approval"] is False
+    assert result["approval_status"] == "not_required"
+
+
+def test_approval_gate_exempts_refusals_even_with_require_approval():
+    refusal = LLMResult(
+        text="The corpus doesn't cover this — it needs sign-off from the bid director.",
+        prompt_tokens=80,
+        completion_tokens=20,
+    )
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: refusal)
+        result = answer_question_agentic(
+            "What's our litigation rate?", session_id="test-approval-refusal", require_approval=True
+        )
+
+    assert result["pending_approval"] is False
+
+
+def test_resume_approval_approved_releases_the_original_answer():
+    session_id = "test-approval-approve"
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: PRICEY_LLM_RESULT)
+        paused = answer_question_agentic(
+            "What is the day rate?", session_id=session_id, require_approval=True
+        )
+        assert paused["pending_approval"] is True
+
+        result = resume_approval(session_id, approved=True)
+
+    assert result["pending_approval"] is False
+    assert result["approval_status"] == "approved"
+    assert result["answer"] == PRICEY_LLM_RESULT.text
+
+
+def test_resume_approval_rejected_replaces_the_answer_with_a_banner():
+    session_id = "test-approval-reject"
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: PRICEY_LLM_RESULT)
+        paused = answer_question_agentic(
+            "What is the day rate?", session_id=session_id, require_approval=True
+        )
+        assert paused["pending_approval"] is True
+
+        result = resume_approval(session_id, approved=False, reason="Rate under renegotiation")
+
+    assert result["pending_approval"] is False
+    assert result["approval_status"] == "rejected"
+    assert "Not released" in result["answer"]
+    assert "Rate under renegotiation" in result["answer"]
+    assert PRICEY_LLM_RESULT.text not in result["answer"]

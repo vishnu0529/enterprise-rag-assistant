@@ -16,7 +16,7 @@ judge-call failure degrades to `0.0` rather than crashing). The full RAG
 pipeline plus evaluation was also verified end-to-end against real ingested
 documents with a mocked LLM standing in for the model (see the commit
 history for `app/services/evaluation.py` and `app/services/rag_chain.py`).
-52/52 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
+58/58 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
 scores the two-agent graph (`app/services/rag_graph.py`) rather than the
 single-pass chain directly — same principle as before, evaluation measures
 whatever `/chat` actually runs, including any Strategist re-planning the

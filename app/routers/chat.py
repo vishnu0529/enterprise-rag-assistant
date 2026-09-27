@@ -1,15 +1,36 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.core.auth import require_api_key
 from app.core.db import get_session
-from app.models.schemas import ChatRequest, ChatResponse, Document
-from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic
+from app.models.schemas import ApprovalRequest, ChatRequest, ChatResponse, Document
+from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic, resume_approval
 from app.services.session_store import add_message, get_history, get_or_create_session
 
 router = APIRouter(tags=["chat"], dependencies=[Depends(require_api_key)])
+
+
+def _to_response(session_id: str, result: dict) -> ChatResponse:
+    return ChatResponse(
+        session_id=session_id,
+        answer=result.get("answer"),
+        citations=result.get("citations", []),
+        latency_ms=result.get("latency_ms", 0.0),
+        prompt_tokens=result.get("prompt_tokens", 0),
+        completion_tokens=result.get("completion_tokens", 0),
+        faithfulness_score=result.get("faithfulness_score"),
+        retries=result.get("retries", 0),
+        escalated=result.get("escalated", False),
+        used_memory=result.get("used_memory", False),
+        sub_queries=result.get("sub_queries", []),
+        strategist_reasoning=result.get("strategist_reasoning", ""),
+        pending_approval=result.get("pending_approval", False),
+        approval_status=result.get("approval_status", "not_required"),
+        approval_reason=result.get("approval_reason", ""),
+        draft_answer=result.get("draft_answer"),
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -40,25 +61,34 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
         history=history,
         user_id=request.user_id,
         session_id=session_id,
+        require_approval=request.require_approval,
     )
 
     add_message(session, session_id, "user", request.question)
-    add_message(session, session_id, "assistant", result["answer"])
+    # A paused run has no answer yet (result["answer"] is None) — nothing to
+    # record until POST .../approve resolves it one way or the other.
+    if not result.get("pending_approval"):
+        add_message(session, session_id, "assistant", result["answer"])
 
-    return ChatResponse(
-        session_id=session_id,
-        answer=result["answer"],
-        citations=result["citations"],
-        latency_ms=result["latency_ms"],
-        prompt_tokens=result["prompt_tokens"],
-        completion_tokens=result["completion_tokens"],
-        faithfulness_score=result.get("faithfulness_score"),
-        retries=result.get("retries", 0),
-        escalated=result.get("escalated", False),
-        used_memory=result.get("used_memory", False),
-        sub_queries=result.get("sub_queries", []),
-        strategist_reasoning=result.get("strategist_reasoning", ""),
-    )
+    return _to_response(session_id, result)
+
+
+@router.post("/chat/{session_id}/approve", response_model=ChatResponse)
+def approve(session_id: str, request: ApprovalRequest, session: Session = Depends(get_session)):
+    """Resumes a run paused by approval_gate_node (see rag_graph.py) — the
+    human-in-the-loop boundary before a commercially-sensitive answer is
+    released. session_id must be a session that's actually paused; there's
+    no way to distinguish "never existed" from "already resolved" from
+    LangGraph's own error here, so both surface as the same 409."""
+    try:
+        result = resume_approval(session_id, approved=request.approved, reason=request.reason)
+    except KeyError as e:
+        raise HTTPException(409, f"No pending approval for session {session_id!r} ({e})") from e
+
+    if not result.get("pending_approval"):
+        add_message(session, session_id, "assistant", result["answer"])
+
+    return _to_response(session_id, result)
 
 
 @router.get("/chat/{session_id}/history")

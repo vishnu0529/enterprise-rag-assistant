@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-58%20passing-brightgreen)](tests/)
 [![Golden Set](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vishnu0529/enterprise-rag-assistant/main/eval/golden_set_metrics.json)](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -75,6 +75,7 @@ if it isn't measured, it doesn't go in the README.
 - **Two-agent corrective RAG**: a Retrieval Strategist agent decides *how* to search (including real multi-hop decomposition into several sub-queries for comparison-style questions), a separate Drafting Agent writes the answer from whatever evidence it's given — they never see each other's prompts, only shared graph state. A critique node scores faithfulness *and* checks that the answer actually cites a source, and if either check fails, sends the Strategist back to re-plan (capped), instead of just returning a possibly-hallucinated or uncited answer
 - **Escalation instead of silent degradation**: if retries run out and the answer is still ungrounded or uncited, it's flagged with a visible "needs bid-director review" banner and `escalated: true` in the API response — a low-confidence answer never looks the same as a good one. A genuine refusal ("the corpus doesn't cover this") is correctly exempted from the citation check
 - **Durable checkpointing**: the graph's own state (not just chat history) is checkpointed to Postgres in production — a killed and restarted process resumes an in-flight run instead of losing it, verified with a real two-process, real-`SIGKILL` demo (`scripts/demo_kill_and_resume.py`), not just claimed. Falls back to in-memory for local SQLite dev
+- **Human-in-the-loop approval on commercially-sensitive answers**: opt in with `require_approval: true` and an answer quoting a specific £ figure genuinely pauses the graph via LangGraph's `interrupt()` — not a warning banner, an actual halt — until `POST /chat/{session_id}/approve` releases or rejects it. Off by default, so every existing caller (eval, golden set) is unaffected
 - **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session — not just the current conversation's history. Deliberately a separate mechanism from graph checkpointing: one is short-term/thread-scoped, the other long-term/cross-session (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
 - **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io) — scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
@@ -99,6 +100,8 @@ flowchart LR
     Drafter --> LLM[Gemini / Claude]
     Drafter -.critique fails: re-plan.-> Strategist
     Drafter --> Escalate{{escalate: still bad<br/>after retries?}}
+    Escalate --> Approval{{approval_gate:<br/>interrupt() if priced}}
+    Approval -.human decides.-> API
     Strategist --> Memory[(User Memory<br/>Qdrant, per user_id)]
     API --> DB[(Sessions + Documents<br/>SQLite dev / Postgres prod)]
     Strategist -.checkpoint per node.-> Checkpoint[(Graph Checkpoint<br/>Postgres prod / in-memory dev)]
@@ -108,7 +111,8 @@ The chat path is `app/services/rag_graph.py`: recall memory → **strategize** (
 Strategist decides sub-queries + top_k) → retrieve → **draft** (Drafting Agent writes the
 answer) → critique (faithfulness + citation check) → (send the Strategist back to re-plan if
 ungrounded or uncited, capped at 2 retries) → **escalate** (flags the answer for human review if
-still bad) → remember. Full component breakdown and design decisions:
+still bad) → **approval_gate** (pauses via `interrupt()` if the answer quotes a commercial
+figure and the caller opted in) → remember. Full component breakdown and design decisions:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tech Stack
@@ -125,7 +129,7 @@ still bad) → remember. Full component breakdown and design decisions:
 | Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) in prod, in-memory `MemorySaver` in dev — same split as session storage above |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 52 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 58 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -167,7 +171,8 @@ docker compose up --build
 | `POST` | `/documents` | Upload a PDF/Markdown/txt file, chunk + embed it |
 | `GET` | `/documents` | List ingested documents |
 | `DELETE` | `/documents/{id}` | Remove a document and its vectors |
-| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory); returns answer + citations + latency/token metrics + faithfulness score + retry count + `escalated` flag + the Strategist's sub-queries/reasoning |
+| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory, `require_approval` for the HITL gate); returns answer + citations + latency/token metrics + faithfulness score + retry count + `escalated` flag + the Strategist's sub-queries/reasoning. If `require_approval` is set and the answer is commercially sensitive, `answer` is `null` and `pending_approval: true` |
+| `POST` | `/chat/{session_id}/approve` | Resumes a paused run with `{"approved": bool, "reason": str?}` — the human-in-the-loop decision on a `pending_approval` response. 409 if nothing is actually paused on that session |
 | `GET` | `/chat/{session_id}/history` | Retrieve a conversation's history |
 | `POST` | `/evaluate` | Score a single question/answer against retrieved context |
 
@@ -184,7 +189,7 @@ correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
 
-**Current status:** metric logic is fully unit-tested (52/52 passing,
+**Current status:** metric logic is fully unit-tested (58/58 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -195,7 +200,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 52 tests, ~15s (after first model download), no network required
+pytest -q          # 58 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```

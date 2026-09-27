@@ -1,7 +1,5 @@
 from typing import TypedDict
 
-from app.models.schemas import Citation
-
 
 class RagAgentState(TypedDict, total=False):
     """Shared state threaded through the two-agent corrective-RAG graph.
@@ -20,6 +18,7 @@ class RagAgentState(TypedDict, total=False):
     user_id: str | None
     session_id: str
     requested_top_k: int | None  # caller-supplied hint, the Strategist may honor or override
+    require_approval: bool  # opt-in: gate commercially-sensitive answers behind interrupt()
 
     # Retrieval Strategist output, consumed by retrieve_node
     sub_queries: list[str]
@@ -32,7 +31,7 @@ class RagAgentState(TypedDict, total=False):
 
     # Drafting Agent output (cumulative across retries)
     answer: str
-    citations: list[Citation]
+    citations: list[dict]  # plain dicts, not Citation Pydantic objects — see draft_node
     prompt_tokens: int
     completion_tokens: int
     llm_error: bool  # True if the Drafting Agent's LLM call itself raised (e.g. quota/network) —
@@ -49,6 +48,12 @@ class RagAgentState(TypedDict, total=False):
     # answer is still ungrounded or uncited; the bid team must see this, not
     # silently receive a low-confidence answer that looks the same as a good one
     escalated: bool
+
+    # human-in-the-loop (approval_gate_node) — set when require_approval=True
+    # and the drafted answer quotes a commercial figure. "not_required" means
+    # the gate ran but didn't need to pause; "approved"/"rejected" mean a
+    # human actually decided via the /chat/{session_id}/approve endpoint.
+    approval_status: str
 
     # cross-session memory (populated by recall_memory node)
     remembered_context: list[dict]

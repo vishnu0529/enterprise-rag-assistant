@@ -58,11 +58,17 @@ class ChatRequest(BaseModel):
     document_id: str | None = None
     top_k: int | None = None
     user_id: str | None = None  # optional: enables cross-session memory recall
+    require_approval: bool = False  # gate commercially-sensitive answers behind interrupt()
+
+
+class ApprovalRequest(BaseModel):
+    approved: bool
+    reason: str | None = None  # required in spirit if approved=False; not enforced, just recorded
 
 
 class ChatResponse(BaseModel):
     session_id: str
-    answer: str
+    answer: str | None  # None only while pending_approval is True — nothing has been released yet
     citations: list[Citation]
     latency_ms: float
     prompt_tokens: int
@@ -73,3 +79,7 @@ class ChatResponse(BaseModel):
     used_memory: bool = False  # whether a past session's exchange was recalled into context
     sub_queries: list[str] = []  # the Retrieval Strategist's actual search plan for this answer
     strategist_reasoning: str = ""  # the Strategist's one-sentence rationale for that plan
+    pending_approval: bool = False  # True: paused at approval_gate_node, call POST .../approve
+    approval_status: str = "not_required"  # not_required | approved | rejected
+    approval_reason: str = ""  # why approval was needed, only set when pending_approval is True
+    draft_answer: str | None = None  # the un-released draft, only set when pending_approval is True
