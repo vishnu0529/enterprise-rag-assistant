@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
+from app.core.cost import estimate_cost_usd
 from app.core.db import init_db
 from app.services.evaluation import evaluate_question
 from app.services.ingestion import chunk_document, load_text
@@ -48,11 +49,6 @@ EVAL_SET = [
     },
 ]
 
-# Illustrative only, NOT official pricing — update with current provider rates
-# before relying on this for real cost tracking.
-COST_PER_1K_PROMPT_TOKENS_USD = 0.000075
-COST_PER_1K_COMPLETION_TOKENS_USD = 0.0003
-
 
 def main() -> None:
     init_db()
@@ -79,10 +75,7 @@ def main() -> None:
 
     total_prompt_tokens = sum(r.prompt_tokens for r in results)
     total_completion_tokens = sum(r.completion_tokens for r in results)
-    est_cost = (
-        total_prompt_tokens / 1000 * COST_PER_1K_PROMPT_TOKENS_USD
-        + total_completion_tokens / 1000 * COST_PER_1K_COMPLETION_TOKENS_USD
-    )
+    est_cost = estimate_cost_usd(total_prompt_tokens, total_completion_tokens)
 
     lines = [
         "# Evaluation Results",

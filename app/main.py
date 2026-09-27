@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.core.db import init_db
+from app.core.version import CODE_VERSION
 from app.routers import chat, documents, evaluate
 
 
@@ -30,7 +31,7 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "code_version": CODE_VERSION}
 
 
 app.include_router(documents.router)

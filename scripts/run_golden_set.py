@@ -31,35 +31,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.cost import estimate_cost_usd
 from app.core.db import init_db
 from app.services.evaluation import evaluate_question
 from app.services.ingestion import chunk_document, load_text
+from app.services.rag_chain import is_refusal
 from app.services.rag_graph import answer_question_agentic
 from app.services.vector_store import upsert_chunks
 
 MIN_FAITHFULNESS = 0.7
 MIN_CONTEXT_RECALL = 0.5
-
-# Illustrative only, NOT official pricing — same rates as scripts/run_evaluation.py.
-COST_PER_1K_PROMPT_TOKENS_USD = 0.000075
-COST_PER_1K_COMPLETION_TOKENS_USD = 0.0003
-
-REFUSAL_MARKERS = (
-    "doesn't cover",
-    "does not cover",
-    "don't have enough information",
-    "do not have enough information",
-    "not covered",
-    "bid director",
-    "isn't in the",
-    "isn't covered",
-    "no information",
-)
-
-
-def _is_refusal(answer: str) -> bool:
-    lowered = answer.lower()
-    return any(marker in lowered for marker in REFUSAL_MARKERS)
 
 
 def _percentile(values: list[float], pct: float) -> float:
@@ -109,7 +90,7 @@ def _score_answerable(item: dict) -> dict:
 
 def _score_trap(item: dict) -> dict:
     result = answer_question_agentic(item["question"])
-    passed = _is_refusal(result["answer"])
+    passed = is_refusal(result["answer"])
     return {
         "id": item["id"],
         "category": "trap",
@@ -195,22 +176,29 @@ def main() -> None:
         ]
 
     latencies = [r["latency_ms"] for r in results]
+    p50_latency = _percentile(latencies, 50)
     p95_latency = _percentile(latencies, 95)
     mean_latency = statistics.mean(latencies)
     total_prompt_tokens = sum(r.get("prompt_tokens", 0) for r in results)
     total_completion_tokens = sum(r.get("completion_tokens", 0) for r in results)
-    total_cost = (
-        total_prompt_tokens / 1000 * COST_PER_1K_PROMPT_TOKENS_USD
-        + total_completion_tokens / 1000 * COST_PER_1K_COMPLETION_TOKENS_USD
-    )
+    total_cost = estimate_cost_usd(total_prompt_tokens, total_completion_tokens)
+    cost_per_task = total_cost / len(results) if results else 0.0
 
+    latency_line = (
+        f"- p50 latency: {p50_latency:.0f} ms &middot; "
+        f"p95 latency: {p95_latency:.0f} ms (mean: {mean_latency:.0f} ms)"
+    )
+    cost_line = (
+        f"- Estimated cost (illustrative pricing, not official rates): "
+        f"${total_cost:.5f} total, ${cost_per_task:.6f}/task"
+    )
     lines += [
         "",
         "**Cost and latency**",
         "",
-        f"- p95 latency: {p95_latency:.0f} ms (mean: {mean_latency:.0f} ms)",
+        latency_line,
         f"- Total tokens: {total_prompt_tokens} prompt + {total_completion_tokens} completion",
-        f"- Estimated cost (illustrative pricing, not official rates): ${total_cost:.5f}",
+        cost_line,
     ]
 
     failed = [r for r in results if not r["passed"]]
@@ -249,9 +237,11 @@ def main() -> None:
         "n_traps": len(trap_results),
         "n_trap_pass": n_trap_pass,
         "pass_rate_pct": pct,
+        "p50_latency_ms": round(p50_latency, 1),
         "p95_latency_ms": round(p95_latency, 1),
         "mean_latency_ms": round(mean_latency, 1),
         "total_cost_usd": round(total_cost, 5),
+        "cost_per_task_usd": round(cost_per_task, 6),
     }
     with (eval_dir / "metrics_history.jsonl").open("a") as f:
         f.write(json.dumps(history_record) + "\n")

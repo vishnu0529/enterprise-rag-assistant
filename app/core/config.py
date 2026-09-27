@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # Empty (the local-dev default) disables the gate entirely.
     API_KEY: str = ""
 
+    # Tracing — see app/core/tracing.py. Empty (dev default): spans print to
+    # the console, zero external services. Set to any OTel-compatible
+    # collector endpoint (Jaeger, Grafana Tempo, Honeycomb, ...) to export
+    # real traces instead — same local-first-dev/production-shaped-deploy
+    # split as Qdrant/Postgres above.
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
+
     # Data boundary — see app/services/data_boundary.py. "block" rejects
     # ingestion of anything matching a sensitive-data pattern (the exact gap
     # that let a real tuition-payment letter with bank details reach the

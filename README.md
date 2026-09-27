@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-63%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-71%20passing-brightgreen)](tests/)
 [![Golden Set](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vishnu0529/enterprise-rag-assistant/main/eval/golden_set_metrics.json)](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -18,7 +18,7 @@
 
 **Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
 
-Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
+Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Failure Modes](docs/FAILURE_MODES.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
 
 <p align="center"><img src="docs/graph.png" alt="The real compiled corrective-RAG graph" width="360"></p>
 
@@ -81,6 +81,8 @@ if it isn't measured, it doesn't go in the README.
 - **Durable checkpointing**: the graph's own state (not just chat history) is checkpointed to Postgres in production — a killed and restarted process resumes an in-flight run instead of losing it, verified with a real two-process, real-`SIGKILL` demo (`scripts/demo_kill_and_resume.py`), not just claimed. Falls back to in-memory for local SQLite dev
 - **Human-in-the-loop approval on commercially-sensitive answers**: opt in with `require_approval: true` and an answer quoting a specific £ figure genuinely pauses the graph via LangGraph's `interrupt()` — not a warning banner, an actual halt — until `POST /chat/{session_id}/approve` releases or rejects it. Off by default, so every existing caller (eval, golden set) is unaffected
 - **LLM calls have an explicit timeout and retry with backoff**: neither provider client had a timeout configured before — a hung connection could hang a `/chat` request indefinitely. Both `LLM_TIMEOUT_SECONDS` and `LLM_MAX_RETRIES` are wired through each SDK's own native retry transport (exponential backoff with jitter), not a hand-rolled loop, and verified via `tests/test_llm_client.py` that the config actually reaches the client, not just that it's declared in settings
+- **Every graph node is traced with OpenTelemetry**: a real span per node (`recall_memory`, `strategize`, `retrieve`, `draft`, `critique`, `escalate`, `approval_gate`, `remember`) nested under one parent span per request, with cost/latency/retry attributes attached — not just the final answer. Console output with zero setup in dev; set `OTEL_EXPORTER_OTLP_ENDPOINT` to export to any real backend (Jaeger, Grafana Tempo, Honeycomb, ...) in production. Verified with `tests/test_tracing.py` using OpenTelemetry's own in-memory exporter — real spans, real trace hierarchy, not asserted-by-inspection
+- **Every answer carries the exact commit that produced it**: `code_version` on every `/chat` response and `/health`, resolved from git (or `GIT_COMMIT_SHA` at deploy time) — since prompts and config live as code here, the commit *is* the prompt/config version, answering "which version produced this past answer" exactly
 - **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session — not just the current conversation's history. Deliberately a separate mechanism from graph checkpointing: one is short-term/thread-scoped, the other long-term/cross-session (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
 - **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io) — scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
@@ -132,9 +134,10 @@ figure and the caller opted in) → remember. Full component breakdown and desig
 | LLMs | Google Gemini / Anthropic Claude |
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) in prod, in-memory `MemorySaver` in dev — same split as session storage above |
+| Tracing | OpenTelemetry — one span per graph node, console exporter in dev / OTLP to any real backend in prod (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 63 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 71 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -176,7 +179,7 @@ docker compose up --build
 | `POST` | `/documents` | Upload a PDF/Markdown/txt file, chunk + embed it |
 | `GET` | `/documents` | List ingested documents |
 | `DELETE` | `/documents/{id}` | Remove a document and its vectors |
-| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory, `require_approval` for the HITL gate); returns answer + citations + latency/token metrics + faithfulness score + retry count + `escalated` flag + the Strategist's sub-queries/reasoning. If `require_approval` is set and the answer is commercially sensitive, `answer` is `null` and `pending_approval: true` |
+| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory, `require_approval` for the HITL gate); returns answer + citations + latency/token/cost metrics + faithfulness score + retry count + `escalated` flag + `code_version` + the Strategist's sub-queries/reasoning. If `require_approval` is set and the answer is commercially sensitive, `answer` is `null` and `pending_approval: true` |
 | `POST` | `/chat/{session_id}/approve` | Resumes a paused run with `{"approved": bool, "reason": str?}` — the human-in-the-loop decision on a `pending_approval` response. 409 if nothing is actually paused on that session |
 | `GET` | `/chat/{session_id}/history` | Retrieve a conversation's history |
 | `POST` | `/evaluate` | Score a single question/answer against retrieved context |
@@ -194,7 +197,7 @@ correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
 
-**Current status:** metric logic is fully unit-tested (63/63 passing,
+**Current status:** metric logic is fully unit-tested (71/71 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -205,7 +208,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 63 tests, ~15s (after first model download), no network required
+pytest -q          # 71 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```

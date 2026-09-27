@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from app.core.auth import require_api_key
 from app.core.db import get_session
+from app.core.version import CODE_VERSION
 from app.models.schemas import ApprovalRequest, ChatRequest, ChatResponse, Document
 from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic, resume_approval
 from app.services.session_store import add_message, get_history, get_or_create_session
@@ -30,6 +31,8 @@ def _to_response(session_id: str, result: dict) -> ChatResponse:
         approval_status=result.get("approval_status", "not_required"),
         approval_reason=result.get("approval_reason", ""),
         draft_answer=result.get("draft_answer"),
+        code_version=CODE_VERSION,
+        cost_usd=result.get("cost_usd", 0.0),
     )
 
 
@@ -52,6 +55,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
             latency_ms=0.0,
             prompt_tokens=0,
             completion_tokens=0,
+            code_version=CODE_VERSION,
         )
 
     result = answer_question_agentic(

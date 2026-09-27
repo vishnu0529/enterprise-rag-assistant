@@ -41,12 +41,15 @@ cross-session memory (memory_store.py) is deliberately separate from
 LangGraph's own thread-scoped checkpointing.
 """
 
+import functools
 import logging
 import re
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command, interrupt
 
+from app.core.cost import estimate_cost_usd
+from app.core.tracing import get_tracer
 from app.services.agent_state import RagAgentState
 from app.services.checkpointer import get_checkpointer
 from app.services.evaluation import score_faithfulness
@@ -96,6 +99,48 @@ STRATEGIST_SYSTEM_PROMPT = (
     'Respond as JSON: {"sub_queries": ["..."], "top_k": <int>, "reasoning": "<one sentence>"}'
 )
 
+_SCALAR_SPAN_ATTRS = (
+    "top_k",
+    "strategist_reasoning",
+    "no_documents",
+    "faithfulness_score",
+    "missing_citation",
+    "retry_count",
+    "escalated",
+    "approval_status",
+    "llm_error",
+)
+
+
+def _traced(name: str):
+    """Wraps a node function in an OpenTelemetry span named after the node,
+    recording the interesting fields it returned as span attributes. This is
+    scorecard item 4 (tracing) — every node's inputs/outputs are visible in
+    whatever backend OTEL_EXPORTER_OTLP_ENDPOINT points at (or the console,
+    in dev), not just the final answer."""
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(state: RagAgentState) -> dict:
+            tracer = get_tracer()
+            with tracer.start_as_current_span(name) as span:
+                span.set_attribute("rag.session_id", state.get("session_id") or "")
+                result = fn(state)
+                if "chunks" in result:
+                    span.set_attribute("rag.chunks_retrieved", len(result["chunks"]))
+                if "citations" in result:
+                    span.set_attribute("rag.citations_count", len(result["citations"]))
+                if "sub_queries" in result:
+                    span.set_attribute("rag.sub_queries", ", ".join(result["sub_queries"]))
+                for key in _SCALAR_SPAN_ATTRS:
+                    if key in result and result[key] is not None:
+                        span.set_attribute(f"rag.{key}", result[key])
+                return result
+
+        return wrapper
+
+    return decorator
+
 
 def _build_strategize_prompt(state: RagAgentState) -> str:
     parts = [f"QUESTION: {state['original_question']}"]
@@ -121,6 +166,7 @@ def _build_strategize_prompt(state: RagAgentState) -> str:
     return "\n".join(parts)
 
 
+@_traced("recall_memory")
 def recall_memory_node(state: RagAgentState) -> dict:
     user_id = state.get("user_id")
     if not user_id:
@@ -132,6 +178,7 @@ def recall_memory_node(state: RagAgentState) -> dict:
     return {"remembered_context": remembered}
 
 
+@_traced("strategize")
 def strategize_node(state: RagAgentState) -> dict:
     is_retry = bool(state.get("critique_feedback"))
     prompt = _build_strategize_prompt(state)
@@ -163,6 +210,7 @@ def _merge_and_dedupe(chunks: list[dict]) -> list[dict]:
     return sorted(best.values(), key=lambda c: c["score"], reverse=True)
 
 
+@_traced("retrieve")
 def retrieve_node(state: RagAgentState) -> dict:
     sub_queries = state.get("sub_queries") or [state["original_question"]]
     all_chunks = []
@@ -176,6 +224,7 @@ def _route_after_retrieve(state: RagAgentState) -> str:
     return "no_documents" if state.get("no_documents") else "draft"
 
 
+@_traced("no_documents")
 def no_documents_node(state: RagAgentState) -> dict:
     return {
         "answer": NO_DOCUMENTS_ANSWER,
@@ -185,6 +234,7 @@ def no_documents_node(state: RagAgentState) -> dict:
     }
 
 
+@_traced("draft")
 def draft_node(state: RagAgentState) -> dict:
     """The Drafting Agent: writes the answer from whatever the Strategist's
     plan retrieved. Deliberately has no say over search strategy — it
@@ -263,6 +313,7 @@ def draft_node(state: RagAgentState) -> dict:
     }
 
 
+@_traced("critique")
 def critique_node(state: RagAgentState) -> dict:
     if state.get("llm_error"):
         # The Drafting Agent's call already failed — a faithfulness judge
@@ -306,6 +357,7 @@ def _should_retry(state: RagAgentState) -> str:
     return "escalate"
 
 
+@_traced("escalate")
 def escalate_node(state: RagAgentState) -> dict:
     """Scorecard item 7 — escalation on low confidence. Runs after retries
     are exhausted (or after an llm_error, or immediately after a first-pass
@@ -333,6 +385,7 @@ def escalate_node(state: RagAgentState) -> dict:
     return {"answer": banner + state["answer"], "escalated": True}
 
 
+@_traced("approval_gate")
 def approval_gate_node(state: RagAgentState) -> dict:
     """Human-in-the-loop gate (scorecard item 11's spirit — access control
     on the *action*, not just data). Only active when the caller opts in
@@ -367,6 +420,7 @@ def approval_gate_node(state: RagAgentState) -> dict:
     return {"answer": REJECTION_BANNER.format(reason=reason), "approval_status": "rejected"}
 
 
+@_traced("remember")
 def remember_node(state: RagAgentState) -> dict:
     user_id = state.get("user_id")
     if user_id and not state.get("llm_error"):
@@ -427,6 +481,7 @@ def _build_result(result: dict, latency_ms: float) -> dict:
     An interrupted run (result["__interrupt__"] present) has no "answer" yet
     — the draft is sitting inside the interrupt payload, not released."""
     pending = result.get("__interrupt__")
+    cost_usd = estimate_cost_usd(result.get("prompt_tokens", 0), result.get("completion_tokens", 0))
     if pending:
         payload = pending[0].value
         return {
@@ -438,6 +493,7 @@ def _build_result(result: dict, latency_ms: float) -> dict:
             "latency_ms": latency_ms,
             "prompt_tokens": result.get("prompt_tokens", 0),
             "completion_tokens": result.get("completion_tokens", 0),
+            "cost_usd": cost_usd,
             "contexts": [c["text"] for c in result.get("chunks", [])],
             "faithfulness_score": result.get("faithfulness_score"),
             "retries": result.get("retry_count", 0),
@@ -455,6 +511,7 @@ def _build_result(result: dict, latency_ms: float) -> dict:
         "latency_ms": latency_ms,
         "prompt_tokens": result.get("prompt_tokens", 0),
         "completion_tokens": result.get("completion_tokens", 0),
+        "cost_usd": cost_usd,
         "contexts": [c["text"] for c in result.get("chunks", [])],
         "faithfulness_score": result.get("faithfulness_score"),
         "retries": result.get("retry_count", 0),
@@ -507,9 +564,17 @@ def answer_question_agentic(
     # output keys on every run, so resuming an existing thread for a new
     # question never leaks stale state from a prior turn (see tests).
     config = {"configurable": {"thread_id": session_id or "no-session"}}
-    result = graph.invoke(initial_state, config=config)
-    latency_ms = (time.perf_counter() - start) * 1000
-    return _build_result(result, latency_ms)
+    tracer = get_tracer()
+    with tracer.start_as_current_span("answer_question") as span:
+        span.set_attribute("rag.session_id", session_id or "no-session")
+        span.set_attribute("rag.require_approval", require_approval)
+        result = graph.invoke(initial_state, config=config)
+        latency_ms = (time.perf_counter() - start) * 1000
+        built = _build_result(result, latency_ms)
+        span.set_attribute("rag.latency_ms", latency_ms)
+        span.set_attribute("rag.cost_usd", built["cost_usd"])
+        span.set_attribute("rag.pending_approval", built["pending_approval"])
+    return built
 
 
 def resume_approval(session_id: str, approved: bool, reason: str | None = None) -> dict:
@@ -532,6 +597,15 @@ def resume_approval(session_id: str, approved: bool, reason: str | None = None) 
         raise KeyError(f"no pending approval for session {session_id!r}")
 
     start = time.perf_counter()
-    result = graph.invoke(Command(resume={"approved": approved, "reason": reason}), config=config)
-    latency_ms = (time.perf_counter() - start) * 1000
-    return _build_result(result, latency_ms)
+    tracer = get_tracer()
+    with tracer.start_as_current_span("resume_approval") as span:
+        span.set_attribute("rag.session_id", session_id or "no-session")
+        span.set_attribute("rag.approved", approved)
+        result = graph.invoke(
+            Command(resume={"approved": approved, "reason": reason}), config=config
+        )
+        latency_ms = (time.perf_counter() - start) * 1000
+        built = _build_result(result, latency_ms)
+        span.set_attribute("rag.latency_ms", latency_ms)
+        span.set_attribute("rag.cost_usd", built["cost_usd"])
+    return built

@@ -16,7 +16,7 @@ judge-call failure degrades to `0.0` rather than crashing). The full RAG
 pipeline plus evaluation was also verified end-to-end against real ingested
 documents with a mocked LLM standing in for the model (see the commit
 history for `app/services/evaluation.py` and `app/services/rag_chain.py`).
-63/63 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
+71/71 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
 scores the two-agent graph (`app/services/rag_graph.py`) rather than the
 single-pass chain directly — same principle as before, evaluation measures
 whatever `/chat` actually runs, including any Strategist re-planning the
@@ -92,7 +92,7 @@ python scripts/run_golden_set.py
 This ingests the full corpus, runs every item through the real
 corrective-RAG graph, and writes `eval/golden_set_results.md` — pass/fail
 per item, with faithfulness/context-recall for answerable items and a
-refusal check for traps, plus p95 latency and an illustrative cost estimate.
+refusal check for traps, plus p50/p95 latency and an illustrative cost-per-task estimate.
 It also appends a record to `eval/metrics_history.jsonl` and rewrites
 `eval/golden_set_metrics.json` (a shields.io endpoint-badge payload). The
 script exits non-zero if any trap is answered instead of refused.

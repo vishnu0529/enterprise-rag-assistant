@@ -38,6 +38,12 @@ langgraph-checkpoint-postgres==3.1.2
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 
+# Tracing (app/core/tracing.py) — console exporter needs nothing extra;
+# the OTLP exporter lets OTEL_EXPORTER_OTLP_ENDPOINT point at any real
+# collector (Jaeger, Grafana Tempo, Honeycomb, ...).
+opentelemetry-sdk==1.45.0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+
 # Evaluation
 # NOTE: ragas==0.4.3 has a broken import in this environment
 # (langchain_community.chat_models.vertexai does not exist in the

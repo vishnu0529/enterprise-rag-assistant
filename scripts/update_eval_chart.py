@@ -56,11 +56,13 @@ def _render_chart(records: list[dict]) -> str:
         "",
     ]
     latest = recent[-1]
+    cost_per_task = latest.get("cost_per_task_usd")
+    cost_note = f", ${cost_per_task:.6f}/task" if cost_per_task is not None else ""
     summary = (
         f"Last run: {latest['n_pass']}/{latest['n_items']} passed "
         f"({latest['n_trap_pass']}/{latest['n_traps']} traps refused correctly), "
         f"p95 latency {latest['p95_latency_ms']:.0f} ms, "
-        f"cost ${latest['total_cost_usd']:.5f} — commit `{latest['commit']}`."
+        f"cost ${latest['total_cost_usd']:.5f}{cost_note} — commit `{latest['commit']}`."
     )
     lines.append(summary)
     return "\n".join(lines)

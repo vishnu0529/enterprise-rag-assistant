@@ -83,3 +83,5 @@ class ChatResponse(BaseModel):
     approval_status: str = "not_required"  # not_required | approved | rejected
     approval_reason: str = ""  # why approval was needed, only set when pending_approval is True
     draft_answer: str | None = None  # the un-released draft, only set when pending_approval is True
+    code_version: str = ""  # git commit that produced this answer — see app/core/version.py
+    cost_usd: float = 0.0  # illustrative token-cost estimate — see app/core/cost.py
