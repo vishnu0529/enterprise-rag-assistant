@@ -32,11 +32,11 @@ LangGraph's own thread-scoped checkpointing.
 import logging
 import re
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.models.schemas import Citation
 from app.services.agent_state import RagAgentState
+from app.services.checkpointer import get_checkpointer
 from app.services.evaluation import score_faithfulness
 from app.services.llm_client import call_llm, call_llm_json
 from app.services.memory_store import recall_relevant_memory, remember_exchange
@@ -344,7 +344,7 @@ def build_graph():
     graph.add_edge("escalate", "remember")
     graph.add_edge("remember", END)
 
-    return graph.compile(checkpointer=MemorySaver())
+    return graph.compile(checkpointer=get_checkpointer())
 
 
 _compiled_graph = None
@@ -384,7 +384,13 @@ def answer_question_agentic(
         "retry_count": 0,
         "max_retries": DEFAULT_MAX_RETRIES,
     }
-    config = {"configurable": {"thread_id": f"{session_id or 'no-session'}:{hash(question)}"}}
+    # thread_id is per session (i.e. per engagement), not per question — a
+    # durable checkpointer only means anything if a killed-and-restarted
+    # process resumes the same in-flight conversation, not a fresh one per
+    # question. Every node in this graph unconditionally overwrites its own
+    # output keys on every run, so resuming an existing thread for a new
+    # question never leaks stale state from a prior turn (see tests).
+    config = {"configurable": {"thread_id": session_id or "no-session"}}
     result = graph.invoke(initial_state, config=config)
     latency_ms = (time.perf_counter() - start) * 1000
 
