@@ -46,7 +46,7 @@ NO_DOCUMENTS_ANSWER = (
 )
 
 STRATEGIST_SYSTEM_PROMPT = (
-    "You are the Retrieval Strategist for a knowledge-base assistant. You do not write "
+    "You are the Retrieval Strategist for a proposal-response assistant. You do not write "
     "answers — a separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
     "Decide:\n"
     "1. One or more search queries to run. Use 2-3 only for genuine multi-hop questions "

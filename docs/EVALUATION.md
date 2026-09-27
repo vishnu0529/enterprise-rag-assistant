@@ -24,7 +24,7 @@ graph did, not a separate simplified path (`tests/test_rag_graph.py` covers
 the graph's own retry/cap/memory/multi-hop-merge behaviour).
 
 **Pending — a live run against this project's own API key.**
-`scripts/run_evaluation.py` runs the fixed 4-question eval set below through
+`scripts/run_evaluation.py` runs the fixed 6-question eval set below through
 the *real* Gemini API and writes real scores here. Running it today produces:
 
 ```
@@ -40,16 +40,21 @@ in the evaluation code — the same key hits the same error from
 this key (or a different `GOOGLE_API_KEY`/`ANTHROPIC_API_KEY` is set in
 `.env`), running `python scripts/run_evaluation.py` will populate the table
 below with real faithfulness/relevancy/precision/recall/latency/cost numbers
-against `sample_docs/company_handbook.md`.
+against `sample_docs/proposal_corpus/`.
 
 ## Fixed evaluation set
 
+Deliberately spans five of the seven corpus documents, so this fixed set also
+exercises multi-document retrieval, not just single-file recall.
+
 | # | Question | Ground truth |
 |---|---|---|
-| 1 | How many days of annual leave do full-time employees get, and does it increase over time? | 25 days/year, rising to 30 after 5 years of continuous service |
-| 2 | How many days per week can employees work remotely without special approval? | Up to 3 days/week; full-time remote needs director approval |
-| 3 | What is the expense reimbursement threshold that requires manager approval? | Above £500 requires written line-manager sign-off |
-| 4 | How much paid parental leave do secondary caregivers get? | 4 weeks fully paid |
+| 1 | What is Aldermere Advisory's professional indemnity insurance cover per claim? | £5 million per claim |
+| 2 | By how many working days did the finance function redesign engagement reduce month-end close, and from what starting point? | From 12 working days to 5 working days |
+| 3 | What is the day rate for a Senior Consultant? | £1,050 per day, excluding VAT |
+| 4 | What are Aldermere's standard payment terms? | Net 30 days from invoice date, invoiced monthly in arrears unless the proposal specifies fixed-price milestone billing |
+| 5 | Who led the AI-augmented document review pilot for the regional law firm, and what is their relevant qualification? | Dr Ines Falk; PhD in Computer Science (NLP), University of Edinburgh |
+| 6 | What is the liability cap in Aldermere's standard commercial terms? | 100% of fees paid in the preceding 12 months, except gross negligence, wilful misconduct, or breach of confidentiality, which are uncapped |
 
 ## How to fill this in with real numbers
 

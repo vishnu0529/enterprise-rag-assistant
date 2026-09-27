@@ -1,4 +1,4 @@
-# 📚 Enterprise Knowledge Assistant
+# 📋 Proposal Response Assistant
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -7,12 +7,15 @@
 [![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-> Production-style Retrieval-Augmented Generation: document ingestion, cited
-> chat over your own documents, and a rigorous evaluation suite, not just
-> another RAG demo. Most portfolios stop at retrieval + generation; this one
-> also measures whether the answers are actually good.
+> Production-style Retrieval-Augmented Generation for a professional-services
+> bid team: drafts answers to RFP and proposal questions from a firm's own
+> capability statement, past proposals, team credentials, rate card, and
+> standard terms, every claim cited back to a source — and a rigorous
+> evaluation suite, not just another RAG demo. Most portfolios stop at
+> retrieval + generation; this one also measures whether the answers are
+> actually good, and refuses to answer what the corpus doesn't support.
 
-**Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds `sample_docs/company_handbook.md`, not anything sensitive).
+**Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
 
 Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md)
 
@@ -82,7 +85,7 @@ answer) → critique → (send the Strategist back to re-plan if ungrounded, cap
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 30 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 31 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -132,10 +135,10 @@ Interactive docs at `/docs` once the server is running.
 
 ## Evaluation
 
-Four RAGAS-methodology metrics, run against a fixed 4-question eval set over
-`sample_docs/company_handbook.md` via `python scripts/run_evaluation.py`.
+Four RAGAS-methodology metrics, run against a fixed 6-question eval set over
+`sample_docs/proposal_corpus/` via `python scripts/run_evaluation.py`.
 
-**Current status:** metric logic is fully unit-tested (30/30 passing,
+**Current status:** metric logic is fully unit-tested (31/31 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -146,7 +149,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 30 tests, ~15s (after first model download), no network required
+pytest -q          # 31 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```

@@ -49,8 +49,8 @@ curl localhost:8000/health
 python scripts/run_evaluation.py
 ```
 
-Ingests `sample_docs/company_handbook.md`, runs the 4-question fixed eval
-set through the real RAG pipeline, and writes results to
+Ingests every file in `sample_docs/proposal_corpus/`, runs the 6-question
+fixed eval set through the real RAG pipeline, and writes results to
 `docs/EVALUATION.md`. Requires a working `GOOGLE_API_KEY` (or Anthropic key)
 with available quota — see `docs/EVALUATION.md` for the current status of a
 live run against this project's own API key.
@@ -111,5 +111,6 @@ isolation — anyone who has the shared secret (including, after this
 incident, anyone the URL is shared with) can read anything already
 ingested. A real tuition-payment letter with bank details and a home
 address was uploaded to this deployment during testing and had to be
-deleted; `sample_docs/company_handbook.md` is the kind of thing this
-should hold instead.
+deleted; the synthetic documents in `sample_docs/proposal_corpus/` are the
+kind of thing this should hold instead — never a real client's proposals,
+CVs, or rate cards.

@@ -20,8 +20,8 @@ def _auth_headers() -> dict:
 
 
 st.set_page_config(
-    page_title="Enterprise Knowledge Assistant",
-    page_icon="📚",
+    page_title="Proposal Response Assistant",
+    page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -113,8 +113,8 @@ with st.sidebar:
 st.markdown(
     """
 <div class="header-dark">
-<h1>📚 Enterprise Knowledge Assistant</h1>
-<p>Production-style RAG: ingestion, cited chat, and rigorous evaluation</p>
+<h1>📋 Proposal Response Assistant</h1>
+<p>Bid-team RAG: drafts answers from your own proposals, credentials and rate card, every claim cited</p>
 <div style="margin-top:10px;">
 <span class="hbadge hb-blue">Qdrant</span>
 <span class="hbadge hb-green">FastAPI</span>

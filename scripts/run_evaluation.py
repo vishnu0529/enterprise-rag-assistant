@@ -19,22 +19,32 @@ from app.services.vector_store import upsert_chunks
 
 # noqa: E501 — these are natural-language eval data, not code; wrapping them
 # would hurt readability more than the line-length lint helps.
+# Deliberately spans five of the seven corpus documents, so this fixed set
+# also exercises multi-document retrieval, not just single-file recall.
 EVAL_SET = [
     {
-        "question": "How many days of annual leave do full-time employees get, and does it increase over time?",  # noqa: E501
-        "ground_truth": "Full-time employees get 25 days of annual leave per year, increasing to 30 days after 5 years of continuous service.",  # noqa: E501
+        "question": "What is Aldermere Advisory's professional indemnity insurance cover per claim?",  # noqa: E501
+        "ground_truth": "Professional indemnity insurance of £5 million per claim.",
     },
     {
-        "question": "How many days per week can employees work remotely without special approval?",
-        "ground_truth": "Employees may work remotely up to 3 days per week without special approval; full-time remote work needs department director approval.",  # noqa: E501
+        "question": "By how many working days did the finance function redesign engagement reduce month-end close, and from what starting point?",  # noqa: E501
+        "ground_truth": "Month-end close was reduced from 12 working days to 5 working days.",  # noqa: E501
     },
     {
-        "question": "What is the expense reimbursement threshold that requires manager approval?",
-        "ground_truth": "Expenses above £500 require written sign-off from a line manager before being incurred.",  # noqa: E501
+        "question": "What is the day rate for a Senior Consultant?",
+        "ground_truth": "£1,050 per day, excluding VAT.",
     },
     {
-        "question": "How much paid parental leave do secondary caregivers get?",
-        "ground_truth": "Secondary caregivers receive 4 weeks of fully paid parental leave.",
+        "question": "What are Aldermere's standard payment terms?",
+        "ground_truth": "Net 30 days from invoice date, invoiced monthly in arrears unless the proposal specifies fixed-price milestone billing.",  # noqa: E501
+    },
+    {
+        "question": "Who led the AI-augmented document review pilot for the regional law firm, and what is their relevant qualification?",  # noqa: E501
+        "ground_truth": "Dr Ines Falk led the pilot; she holds a PhD in Computer Science (natural language processing) from the University of Edinburgh.",  # noqa: E501
+    },
+    {
+        "question": "What is the liability cap in Aldermere's standard commercial terms?",
+        "ground_truth": "Liability is capped at 100% of fees paid in the preceding 12 months, except for gross negligence, wilful misconduct, or breach of confidentiality, which are uncapped.",  # noqa: E501
     },
 ]
 
@@ -47,10 +57,11 @@ COST_PER_1K_COMPLETION_TOKENS_USD = 0.0003
 def main() -> None:
     init_db()
 
-    sample_doc = Path(__file__).resolve().parent.parent / "sample_docs" / "company_handbook.md"
-    pages = load_text(sample_doc)
-    chunks = chunk_document("eval-doc", sample_doc.name, pages)
-    upsert_chunks(chunks)
+    corpus_dir = Path(__file__).resolve().parent.parent / "sample_docs" / "proposal_corpus"
+    for i, doc_path in enumerate(sorted(corpus_dir.glob("*.md"))):
+        pages = load_text(doc_path)
+        chunks = chunk_document(f"eval-doc-{i}", doc_path.name, pages)
+        upsert_chunks(chunks)
 
     results = []
     for item in EVAL_SET:
@@ -78,7 +89,7 @@ def main() -> None:
         "",
         (
             f"Run against {len(EVAL_SET)} fixed Q&A pairs over "
-            f"`sample_docs/company_handbook.md`, using `{settings.LLM_MODEL}` "
+            f"`sample_docs/proposal_corpus/` (7 documents), using `{settings.LLM_MODEL}` "
             f"via `{settings.LLM_PROVIDER}`."
         ),
         "",
