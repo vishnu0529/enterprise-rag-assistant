@@ -8,6 +8,8 @@ from sqlmodel import Session, select
 from app.core.auth import require_api_key
 from app.core.db import get_session
 from app.models.schemas import Document, DocumentOut, IngestResponse
+from app.services.data_boundary import DataBoundaryViolation
+from app.services.data_boundary import enforce as enforce_data_boundary
 from app.services.ingestion import SUPPORTED_EXTENSIONS, chunk_document, load_text
 from app.services.vector_store import delete_document, upsert_chunks
 
@@ -34,6 +36,19 @@ async def ingest_document(file: UploadFile = File(...), session: Session = Depen
     pages = load_text(dest)
     if not pages:
         raise HTTPException(400, "No extractable text found in document")
+
+    try:
+        enforce_data_boundary("\n".join(p["text"] for p in pages))
+    except DataBoundaryViolation as e:
+        # Reject before the sensitive content ever reaches the vector store —
+        # and don't leave the raw upload sitting on disk either.
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            422,
+            f"Rejected: this document looks like it contains real personal/financial "
+            f"data ({', '.join(e.findings)}). Only synthetic/sample documents should be "
+            f"ingested here — see docs/DEPLOYMENT.md.",
+        ) from e
 
     chunks = chunk_document(document_id, file.filename, pages)
     if not chunks:

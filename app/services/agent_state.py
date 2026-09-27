@@ -41,8 +41,14 @@ class RagAgentState(TypedDict, total=False):
     # critique + loop control
     faithfulness_score: float | None
     critique_feedback: str
+    missing_citation: bool  # answer had no [Source N] marker despite retrieved chunks existing
     retry_count: int
     max_retries: int
+
+    # escalation (escalate_node) — set when retries are exhausted and the
+    # answer is still ungrounded or uncited; the bid team must see this, not
+    # silently receive a low-confidence answer that looks the same as a good one
+    escalated: bool
 
     # cross-session memory (populated by recall_memory node)
     remembered_context: list[dict]

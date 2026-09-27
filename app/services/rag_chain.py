@@ -16,6 +16,28 @@ SYSTEM_PROMPT = (
     "when relevant."
 )
 
+# Phrases the SYSTEM_PROMPT above asks the model to use when it refuses to
+# answer. Shared by the critique/escalation logic in rag_graph.py (a refusal
+# should never be treated as a missing-citation failure) and by
+# scripts/run_golden_set.py (a refusal is exactly what a trap item should
+# produce) — one definition, so the two can't quietly drift apart.
+REFUSAL_MARKERS = (
+    "doesn't cover",
+    "does not cover",
+    "don't have enough information",
+    "do not have enough information",
+    "not covered",
+    "bid director",
+    "isn't in the",
+    "isn't covered",
+    "no information",
+)
+
+
+def is_refusal(answer: str) -> bool:
+    lowered = answer.lower()
+    return any(marker in lowered for marker in REFUSAL_MARKERS)
+
 
 def build_context(chunks: list[dict]) -> str:
     parts = []

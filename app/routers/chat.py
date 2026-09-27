@@ -54,6 +54,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
         completion_tokens=result["completion_tokens"],
         faithfulness_score=result.get("faithfulness_score"),
         retries=result.get("retries", 0),
+        escalated=result.get("escalated", False),
         used_memory=result.get("used_memory", False),
         sub_queries=result.get("sub_queries", []),
         strategist_reasoning=result.get("strategist_reasoning", ""),

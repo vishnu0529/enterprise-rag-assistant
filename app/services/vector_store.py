@@ -85,6 +85,15 @@ def search(query: str, top_k: int | None = None, document_id: str | None = None)
     ]
 
 
+def reset_collection() -> None:
+    """Drops and recreates the collection empty. Used by scripts/rollback.py
+    to restore a known-good state in one command rather than leaving stale
+    or bad chunks mixed in with a re-ingested corpus."""
+    client = get_client()
+    client.delete_collection(collection_name=settings.QDRANT_COLLECTION)
+    _ensure_collection(client)
+
+
 def delete_document(document_id: str) -> None:
     client = get_client()
     client.delete(

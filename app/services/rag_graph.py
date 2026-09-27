@@ -1,11 +1,18 @@
 """Two-agent corrective-RAG graph: a Retrieval Strategist decides how to
 search, a Drafting Agent writes the answer, and a critique gate routes
 back to the Strategist (not just a query rewrite) when the draft isn't
-well-grounded.
+well-grounded or doesn't cite a source.
 
-    recall_memory -> strategize -> retrieve -> draft -> critique
+    recall_memory -> strategize -> retrieve -> draft -> critique -> escalate -> remember
                           ^                                  |
                           '------ retry, with feedback -------'
+
+`escalate` is the scorecard's "escalation on low confidence" item: if
+retries are exhausted and the answer is still ungrounded or still cites no
+source, it is not returned to the bid team looking like any other answer —
+a visible warning is prepended and `escalated=True` is set, so a caller can
+route it for human review instead of silently shipping a low-confidence
+answer into a proposal.
 
 This is a genuine two-role split, not a renamed single function: the
 Strategist (strategize_node) never sees the retrieved context or writes
@@ -23,6 +30,7 @@ LangGraph's own thread-scoped checkpointing.
 """
 
 import logging
+import re
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -32,13 +40,21 @@ from app.services.agent_state import RagAgentState
 from app.services.evaluation import score_faithfulness
 from app.services.llm_client import call_llm, call_llm_json
 from app.services.memory_store import recall_relevant_memory, remember_exchange
-from app.services.rag_chain import SYSTEM_PROMPT, build_context
+from app.services.rag_chain import SYSTEM_PROMPT, build_context, is_refusal
 from app.services.vector_store import search
 
 logger = logging.getLogger(__name__)
 
 MIN_FAITHFULNESS = 0.7
 DEFAULT_MAX_RETRIES = 2
+
+_CITATION_MARKER = re.compile(r"\[Source \d+\]")
+
+ESCALATION_BANNER = (
+    "⚠️ **Needs bid-director review before use** — this answer was not "
+    "well-grounded after {retries} attempt(s) ({reasons}). Do not put it in "
+    "a proposal without human sign-off.\n\n"
+)
 
 NO_DOCUMENTS_ANSWER = (
     "I don't have any ingested documents to answer this from yet. "
@@ -223,25 +239,69 @@ def critique_node(state: RagAgentState) -> dict:
         # The Drafting Agent's call already failed — a faithfulness judge
         # call would hit the exact same broken connection. Skip it; _should_retry
         # checks llm_error directly and won't retry a failure retrying can't fix.
-        return {"faithfulness_score": None, "critique_feedback": ""}
+        return {"faithfulness_score": None, "critique_feedback": "", "missing_citation": False}
+
     contexts = [c["text"] for c in state["chunks"]]
     score = score_faithfulness(state["answer"], contexts)
-    feedback = (
-        ""
-        if score >= MIN_FAITHFULNESS
-        else f"scored {score:.2f}/1.0 on faithfulness — not well supported by the retrieved context"
+    # A refusal ("the corpus doesn't cover this") correctly cites nothing —
+    # citation enforcement only applies to answers that actually claim to
+    # answer the question from the retrieved context.
+    missing_citation = not is_refusal(state["answer"]) and not _CITATION_MARKER.search(
+        state["answer"]
     )
-    return {"faithfulness_score": score, "critique_feedback": feedback}
+
+    feedback_parts = []
+    if score < MIN_FAITHFULNESS:
+        feedback_parts.append(
+            f"scored {score:.2f}/1.0 on faithfulness — not well supported by the retrieved context"
+        )
+    if missing_citation:
+        feedback_parts.append("cited no source — every claim must reference a specific [Source N]")
+
+    return {
+        "faithfulness_score": score,
+        "critique_feedback": "; ".join(feedback_parts),
+        "missing_citation": missing_citation,
+    }
 
 
 def _should_retry(state: RagAgentState) -> str:
     if state.get("llm_error"):
-        return "remember"
+        return "escalate"
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", DEFAULT_MAX_RETRIES)
-    if state.get("faithfulness_score", 1.0) < MIN_FAITHFULNESS and retry_count < max_retries:
+    below_faithfulness = state.get("faithfulness_score", 1.0) < MIN_FAITHFULNESS
+    needs_retry = below_faithfulness or state.get("missing_citation", False)
+    if needs_retry and retry_count < max_retries:
         return "strategize"
-    return "remember"
+    return "escalate"
+
+
+def escalate_node(state: RagAgentState) -> dict:
+    """Scorecard item 7 — escalation on low confidence. Runs after retries
+    are exhausted (or after an llm_error, or immediately after a first-pass
+    success). Only actually escalates if the answer is still ungrounded or
+    still uncited; a good first-pass answer or a genuine llm_error passes
+    through untouched."""
+    if state.get("llm_error"):
+        return {"escalated": False}
+
+    score = state.get("faithfulness_score")
+    still_low = score is not None and score < MIN_FAITHFULNESS
+    still_missing_citation = state.get("missing_citation", False)
+    if not still_low and not still_missing_citation:
+        return {"escalated": False}
+
+    reasons = []
+    if still_low:
+        reasons.append(f"faithfulness {score:.2f}/1.0")
+    if still_missing_citation:
+        reasons.append("no source citation")
+
+    banner = ESCALATION_BANNER.format(
+        retries=state.get("retry_count", 0) + 1, reasons=", ".join(reasons)
+    )
+    return {"answer": banner + state["answer"], "escalated": True}
 
 
 def remember_node(state: RagAgentState) -> dict:
@@ -267,6 +327,7 @@ def build_graph():
     graph.add_node("no_documents", no_documents_node)
     graph.add_node("draft", draft_node)
     graph.add_node("critique", critique_node)
+    graph.add_node("escalate", escalate_node)
     graph.add_node("remember", remember_node)
 
     graph.set_entry_point("recall_memory")
@@ -278,8 +339,9 @@ def build_graph():
     graph.add_edge("no_documents", END)
     graph.add_edge("draft", "critique")
     graph.add_conditional_edges(
-        "critique", _should_retry, {"strategize": "strategize", "remember": "remember"}
+        "critique", _should_retry, {"strategize": "strategize", "escalate": "escalate"}
     )
+    graph.add_edge("escalate", "remember")
     graph.add_edge("remember", END)
 
     return graph.compile(checkpointer=MemorySaver())
@@ -335,6 +397,7 @@ def answer_question_agentic(
         "contexts": [c["text"] for c in result.get("chunks", [])],
         "faithfulness_score": result.get("faithfulness_score"),
         "retries": result.get("retry_count", 0),
+        "escalated": result.get("escalated", False),
         "used_memory": bool(result.get("remembered_context")),
         "sub_queries": result.get("sub_queries", []),
         "strategist_reasoning": result.get("strategist_reasoning", ""),

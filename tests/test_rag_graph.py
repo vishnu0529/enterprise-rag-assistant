@@ -170,6 +170,70 @@ def _raise_call_llm(*a, **k):
     raise RuntimeError("simulated quota/network failure")
 
 
+UNCITED_LLM_RESULT = LLMResult(
+    text="You get 25 days of annual leave.", prompt_tokens=100, completion_tokens=12
+)
+
+
+def test_missing_citation_triggers_a_retry_even_when_faithful():
+    with ExitStack() as stack:
+        mocks = apply_patches(
+            stack,
+            call_llm=lambda *a, **k: UNCITED_LLM_RESULT,
+            score_faithfulness=lambda *a, **k: 0.9,
+        )
+        result = answer_question_agentic("How many annual leave days?")
+
+    # Faithfulness alone would have passed on attempt 1 — it's the missing
+    # [Source N] marker that forces the retry loop to run to its cap.
+    assert result["retries"] == DEFAULT_MAX_RETRIES
+    assert mocks["call_llm"].call_count == DEFAULT_MAX_RETRIES + 1
+
+
+def test_escalation_banner_added_when_retries_exhausted_still_ungrounded():
+    with ExitStack() as stack:
+        apply_patches(stack, score_faithfulness=lambda *a, **k: 0.1)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["escalated"] is True
+    assert "bid-director review" in result["answer"]
+    assert FAKE_LLM_RESULT.text in result["answer"]  # original answer still present, not replaced
+
+
+def test_escalation_banner_added_when_retries_exhausted_still_uncited():
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: UNCITED_LLM_RESULT)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["escalated"] is True
+    assert "no source citation" in result["answer"]
+
+
+def test_no_escalation_when_faithful_and_cited_first_time():
+    with ExitStack() as stack:
+        apply_patches(stack)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["escalated"] is False
+    assert "bid-director review" not in result["answer"]
+
+
+def test_refusal_answers_are_not_flagged_for_missing_citation():
+    refusal_result = LLMResult(
+        text="The corpus doesn't cover this — it needs sign-off from the bid director.",
+        prompt_tokens=80,
+        completion_tokens=20,
+    )
+    with ExitStack() as stack:
+        mocks = apply_patches(
+            stack, call_llm=lambda *a, **k: refusal_result, score_faithfulness=lambda *a, **k: 1.0
+        )
+        result = answer_question_agentic("What's our litigation-support day rate?")
+
+    assert result["escalated"] is False
+    assert mocks["call_llm"].call_count == 1  # no retry burned on a correct refusal
+
+
 def test_llm_failure_in_draft_returns_clean_message_without_retry_or_memory_write():
     """Regression test: draft_node's call_llm previously had no exception
     handling at all (unlike every other LLM call in the graph), so a real

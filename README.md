@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-37%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)](tests/)
 [![Golden Set](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vishnu0529/enterprise-rag-assistant/main/eval/golden_set_metrics.json)](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -30,6 +30,7 @@ Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.
 - [API Reference](#api-reference)
 - [Evaluation](#evaluation)
 - [Running Tests](#running-tests)
+- [Production Hardening](#production-hardening)
 - [Project Structure](#project-structure)
 - [Future Improvements](#future-improvements)
 
@@ -39,7 +40,8 @@ Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.
 
 - **Multi-format ingestion**: PDF (page-tracked), Markdown, plain text
 - **Cited chat**: every answer references the specific document, page, and chunk it came from, with a relevance score
-- **Two-agent corrective RAG**: a Retrieval Strategist agent decides *how* to search (including real multi-hop decomposition into several sub-queries for comparison-style questions), a separate Drafting Agent writes the answer from whatever evidence it's given — they never see each other's prompts, only shared graph state. A critique node scores faithfulness and, if the draft isn't well-grounded, sends the Strategist back to re-plan (capped), instead of just returning a possibly-hallucinated answer
+- **Two-agent corrective RAG**: a Retrieval Strategist agent decides *how* to search (including real multi-hop decomposition into several sub-queries for comparison-style questions), a separate Drafting Agent writes the answer from whatever evidence it's given — they never see each other's prompts, only shared graph state. A critique node scores faithfulness *and* checks that the answer actually cites a source, and if either check fails, sends the Strategist back to re-plan (capped), instead of just returning a possibly-hallucinated or uncited answer
+- **Escalation instead of silent degradation**: if retries run out and the answer is still ungrounded or uncited, it's flagged with a visible "needs bid-director review" banner and `escalated: true` in the API response — a low-confidence answer never looks the same as a good one. A genuine refusal ("the corpus doesn't cover this") is correctly exempted from the citation check
 - **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session — not just the current conversation's history
 - **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
 - **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io) — scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
@@ -63,14 +65,16 @@ flowchart LR
     Qdrant --> Drafter[Drafting Agent<br/>writes from evidence]
     Drafter --> LLM[Gemini / Claude]
     Drafter -.critique fails: re-plan.-> Strategist
+    Drafter --> Escalate{{escalate: still bad<br/>after retries?}}
     Strategist --> Memory[(User Memory<br/>Qdrant, per user_id)]
     API --> DB[(Sessions + Documents<br/>SQLite dev / Postgres prod)]
 ```
 
 The chat path is `app/services/rag_graph.py`: recall memory → **strategize** (Retrieval
 Strategist decides sub-queries + top_k) → retrieve → **draft** (Drafting Agent writes the
-answer) → critique → (send the Strategist back to re-plan if ungrounded, capped at 2 retries)
-→ remember. Full component breakdown and design decisions:
+answer) → critique (faithfulness + citation check) → (send the Strategist back to re-plan if
+ungrounded or uncited, capped at 2 retries) → **escalate** (flags the answer for human review if
+still bad) → remember. Full component breakdown and design decisions:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tech Stack
@@ -86,7 +90,7 @@ answer) → critique → (send the Strategist back to re-plan if ungrounded, cap
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 37 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 50 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -128,7 +132,7 @@ docker compose up --build
 | `POST` | `/documents` | Upload a PDF/Markdown/txt file, chunk + embed it |
 | `GET` | `/documents` | List ingested documents |
 | `DELETE` | `/documents/{id}` | Remove a document and its vectors |
-| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory); returns answer + citations + latency/token metrics + faithfulness score + retry count + the Strategist's sub-queries/reasoning |
+| `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory); returns answer + citations + latency/token metrics + faithfulness score + retry count + `escalated` flag + the Strategist's sub-queries/reasoning |
 | `GET` | `/chat/{session_id}/history` | Retrieve a conversation's history |
 | `POST` | `/evaluate` | Score a single question/answer against retrieved context |
 
@@ -145,7 +149,7 @@ correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
 
-**Current status:** metric logic is fully unit-tested (37/37 passing,
+**Current status:** metric logic is fully unit-tested (50/50 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -156,10 +160,22 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 37 tests, ~15s (after first model download), no network required
+pytest -q          # 50 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```
+
+## Production Hardening
+
+The four things pilots typically skip — demonstrated in code and tests, not
+just described here:
+
+| Scorecard item | What it is | Where |
+|---|---|---|
+| **Escalation on low confidence** | If the critique loop exhausts its retries and the answer is still ungrounded or uncited, a visible "needs bid-director review" banner is prepended and `escalated: true` is set on the response — a low-confidence answer is never indistinguishable from a good one. | `escalate_node` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_escalation_banner_added_*` |
+| **Citation enforcement** | The critique node checks every drafted answer for a `[Source N]` marker, not just faithfulness — an answer with no citation is treated as ungrounded and retried, same as a low faithfulness score. A genuine refusal is correctly exempted (it has nothing to cite). | `critique_node`/`_CITATION_MARKER` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_missing_citation_triggers_a_retry*`, `test_refusal_answers_are_not_flagged*` |
+| **Data-boundary config** | Document ingestion is scanned for patterns that look like real personal/financial data (UK sort codes, account numbers, National Insurance numbers) and rejected by default — this is the control that would have caught [the real incident already on record](docs/DEPLOYMENT.md) where a tuition-payment letter with bank details reached the public demo. Configurable via `DATA_BOUNDARY_MODE` (`block` / `warn` / `off`). | `app/services/data_boundary.py`; `tests/test_data_boundary.py` |
+| **One-command rollback** | `scripts/rollback.py [git-ref]` wipes the vector store and documents table, then re-ingests the corpus from the current working tree or a specific past commit — restoring a known-good state in a single command instead of hand-reconstructing what was ingested. | `scripts/rollback.py`, `vector_store.reset_collection()` |
 
 ## Project Structure
 

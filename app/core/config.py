@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # Empty (the local-dev default) disables the gate entirely.
     API_KEY: str = ""
 
+    # Data boundary — see app/services/data_boundary.py. "block" rejects
+    # ingestion of anything matching a sensitive-data pattern (the exact gap
+    # that let a real tuition-payment letter with bank details reach the
+    # public demo, see docs/DEPLOYMENT.md); "warn" logs but allows it; "off"
+    # disables the check entirely. Default is the strict setting on purpose.
+    DATA_BOUNDARY_MODE: str = "block"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

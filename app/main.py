@@ -21,8 +21,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Enterprise Knowledge Assistant",
-    description="Production-style RAG system with citations and evaluation.",
+    title="Proposal Response Assistant",
+    description="Production-style RAG for bid-team proposal drafting, with citations and eval.",
     version="0.1.0",
     lifespan=lifespan,
 )
