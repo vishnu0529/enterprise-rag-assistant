@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-37%20passing-brightgreen)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 > Production-style Retrieval-Augmented Generation for a professional-services
@@ -85,7 +85,7 @@ answer) → critique → (send the Strategist back to re-plan if ungrounded, cap
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 31 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 37 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -136,9 +136,15 @@ Interactive docs at `/docs` once the server is running.
 ## Evaluation
 
 Four RAGAS-methodology metrics, run against a fixed 6-question eval set over
-`sample_docs/proposal_corpus/` via `python scripts/run_evaluation.py`.
+`sample_docs/proposal_corpus/` via `python scripts/run_evaluation.py`. A
+larger 50-item golden set (`eval/golden_set.json`) goes further: 38
+answerable questions plus 12 deliberate traps — questions phrased like real
+RFP questions but asking for facts the corpus doesn't contain — where a
+correct refusal counts as a pass and a fabricated answer counts as a
+failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
+for how to run it.
 
-**Current status:** metric logic is fully unit-tested (31/31 passing,
+**Current status:** metric logic is fully unit-tested (37/37 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -149,7 +155,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 31 tests, ~15s (after first model download), no network required
+pytest -q          # 37 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```

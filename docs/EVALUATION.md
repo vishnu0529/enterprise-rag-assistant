@@ -16,7 +16,7 @@ judge-call failure degrades to `0.0` rather than crashing). The full RAG
 pipeline plus evaluation was also verified end-to-end against real ingested
 documents with a mocked LLM standing in for the model (see the commit
 history for `app/services/evaluation.py` and `app/services/rag_chain.py`).
-30/30 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
+37/37 tests pass; `pytest -q` reproduces this. `evaluate_question()` now
 scores the two-agent graph (`app/services/rag_graph.py`) rather than the
 single-pass chain directly — same principle as before, evaluation measures
 whatever `/chat` actually runs, including any Strategist re-planning the
@@ -66,3 +66,31 @@ python scripts/run_evaluation.py
 This overwrites this file with a results table (per-question scores +
 averages) and an approximate token-cost estimate, generated directly from a
 live run — not hand-written.
+
+## Golden set: 50 items, including 12 deliberate traps
+
+The fixed 6-question set above checks recall on questions the corpus *can*
+answer. `eval/golden_set.json` goes further: 38 answerable questions plus 12
+traps — questions phrased exactly like real RFP questions, but asking for
+facts genuinely absent from the corpus (a named individual who doesn't
+exist, a rate that's explicitly "quoted separately," an SLA figure that was
+never stated). The correct behaviour on a trap is an explicit refusal, not a
+fluent guess — this is the check that actually matters for a bid team, since
+a hallucinated commercial term in a real proposal is far more costly than a
+missed factual lookup.
+
+The golden set's structure is validated in CI with no API key required
+(`tests/test_golden_set.py` — 50 items, ≥10 traps, every source doc actually
+exists, every trap explains why it's unanswerable). Scoring it against the
+live model is a separate step, same quota constraint as above:
+
+```bash
+export GOOGLE_API_KEY=<a key with available quota>
+python scripts/run_golden_set.py
+```
+
+This ingests the full corpus, runs every item through the real
+corrective-RAG graph, and writes `eval/golden_set_results.md` — pass/fail
+per item, with faithfulness/context-recall for answerable items and a
+refusal check for traps. The script exits non-zero if any trap is answered
+instead of refused, which is what makes it usable as a CI merge gate later.
