@@ -8,6 +8,15 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Anthropic prompt caching only pays off once a system prompt is "long"
+# (the API's own minimum is 1024 tokens on Sonnet 5). No tokenizer dependency
+# is pinned here, so this uses a conservative chars-per-token heuristic
+# (~4 chars/token for English text) as a proxy. Same pattern already proven
+# in ai-business-automation-hub's provider.py (build_system_message). Erring
+# toward "cache it" costs nothing on a miss — cache_control on a short prompt
+# is a no-op, not an error — so the heuristic is deliberately rounded down.
+_ANTHROPIC_CACHE_THRESHOLD_CHARS = 4096
+
 
 @dataclass
 class LLMResult:
@@ -68,10 +77,15 @@ def call_llm(system: str, user: str, max_tokens: int = 2048) -> LLMResult:
         )
     elif provider == "anthropic":
         client = _anthropic_client()
+        system_param = (
+            [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+            if len(system) >= _ANTHROPIC_CACHE_THRESHOLD_CHARS
+            else system
+        )
         msg = client.messages.create(
             model=settings.LLM_MODEL,
             max_tokens=max_tokens,
-            system=system,
+            system=system_param,
             messages=[{"role": "user", "content": user}],
         )
         return LLMResult(

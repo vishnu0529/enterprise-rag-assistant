@@ -1,7 +1,7 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.core.config import settings
-from app.services.llm_client import _anthropic_client, _google_client
+from app.services.llm_client import _anthropic_client, _google_client, call_llm
 
 
 def test_google_client_gets_explicit_timeout_and_retry_options():
@@ -34,3 +34,42 @@ def test_timeout_and_retries_are_configurable_via_settings():
 
     assert http_options.timeout == 5000
     assert http_options.retry_options.attempts == 5
+
+
+def _mock_anthropic_response():
+    response = MagicMock()
+    response.content = [MagicMock(text="answer")]
+    response.usage.input_tokens = 10
+    response.usage.output_tokens = 5
+    return response
+
+
+def test_anthropic_short_system_prompt_is_not_cached():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+    ):
+        call_llm("short system prompt", "question")
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    assert kwargs["system"] == "short system prompt"
+
+
+def test_anthropic_long_system_prompt_gets_cache_control():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+    long_prompt = "x" * 4096
+
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+    ):
+        call_llm(long_prompt, "question")
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    assert kwargs["system"] == [
+        {"type": "text", "text": long_prompt, "cache_control": {"type": "ephemeral"}}
+    ]
