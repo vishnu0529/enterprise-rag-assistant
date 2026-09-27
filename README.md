@@ -22,7 +22,39 @@ Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.
 
 ---
 
+## Case Study: From Demo to Production-Shaped
+
+This started as a generic single-document Q&A demo (`sample_docs/company_handbook.md`,
+an employee handbook, no domain, no hardening). The table below is what actually
+changed converting it into a bid-team proposal-response tool — every number is
+either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
+`git show` against the exact pre-hardening commit (`968144b`), not an estimate.
+
+| | Before (`968144b`) | Now (`HEAD`) |
+|---|---|---|
+| Corpus | 1 generic document, 2 chunks | 7 domain documents (capability statement, 2 past proposals, case studies, CVs, rate card, terms), 33 chunks |
+| Tests | 31 passing | 50 passing (+19) |
+| CI jobs | 3 (`lint`, `test`, `docker-build`) | 5 (+ `eval-gate`, `publish-eval-metrics`) |
+| Hallucination testing | None | 50-item golden set: 38 answerable + 12 deliberate refusal traps |
+| Citation enforcement | None — an uncited answer was indistinguishable from a cited one | `critique_node` retries, then escalates, any answer missing a `[Source N]` marker |
+| Escalation on low confidence | None — a low-faithfulness answer after retries was returned exactly like a good one | Visible "needs bid-director review" banner + `escalated: true` on the response |
+| Data-boundary control | None — [a real tuition-payment letter with bank details reached the public demo](docs/DEPLOYMENT.md) and had to be manually deleted | Ingestion scans for UK sort codes/account numbers/NI numbers and rejects by default (`DATA_BOUNDARY_MODE=block`) |
+| Recovery from a bad state | Manual reconstruction | `scripts/rollback.py [git-ref]` — one command, verified against both the working tree and a specific past commit |
+
+Scale: 4 commits, 33 files touched, +1,545/-95 lines since `968144b`
+(`git diff --stat 968144b HEAD`).
+
+**What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall
+scores, golden-set pass rate, p95 latency, and per-task cost all require a real
+LLM API call, and this project's own key is currently quota-limited (see
+[docs/EVALUATION.md](docs/EVALUATION.md)) — the badge and chart there read
+"pending live run" rather than a made-up number. Standing rule for this repo:
+if it isn't measured, it doesn't go in the README.
+
+---
+
 ## Table of Contents
+- [Case Study](#case-study-from-demo-to-production-shaped)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
