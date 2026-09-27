@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-58%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-63%20passing-brightgreen)](tests/)
 [![Golden Set](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vishnu0529/enterprise-rag-assistant/main/eval/golden_set_metrics.json)](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -19,6 +19,10 @@
 **Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
 
 Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
+
+<p align="center"><img src="docs/graph.png" alt="The real compiled corrective-RAG graph" width="360"></p>
+
+<p align="center"><sub>Rendered directly from the live <code>StateGraph</code> object via <code>scripts/render_graph.py</code> — not hand-drawn, so it can't silently drift out of sync with the actual node/edge structure. Rerun the script after any change to <code>build_graph()</code>.</sub></p>
 
 ---
 
@@ -76,6 +80,7 @@ if it isn't measured, it doesn't go in the README.
 - **Escalation instead of silent degradation**: if retries run out and the answer is still ungrounded or uncited, it's flagged with a visible "needs bid-director review" banner and `escalated: true` in the API response — a low-confidence answer never looks the same as a good one. A genuine refusal ("the corpus doesn't cover this") is correctly exempted from the citation check
 - **Durable checkpointing**: the graph's own state (not just chat history) is checkpointed to Postgres in production — a killed and restarted process resumes an in-flight run instead of losing it, verified with a real two-process, real-`SIGKILL` demo (`scripts/demo_kill_and_resume.py`), not just claimed. Falls back to in-memory for local SQLite dev
 - **Human-in-the-loop approval on commercially-sensitive answers**: opt in with `require_approval: true` and an answer quoting a specific £ figure genuinely pauses the graph via LangGraph's `interrupt()` — not a warning banner, an actual halt — until `POST /chat/{session_id}/approve` releases or rejects it. Off by default, so every existing caller (eval, golden set) is unaffected
+- **LLM calls have an explicit timeout and retry with backoff**: neither provider client had a timeout configured before — a hung connection could hang a `/chat` request indefinitely. Both `LLM_TIMEOUT_SECONDS` and `LLM_MAX_RETRIES` are wired through each SDK's own native retry transport (exponential backoff with jitter), not a hand-rolled loop, and verified via `tests/test_llm_client.py` that the config actually reaches the client, not just that it's declared in settings
 - **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session — not just the current conversation's history. Deliberately a separate mechanism from graph checkpointing: one is short-term/thread-scoped, the other long-term/cross-session (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
 - **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io) — scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
@@ -129,7 +134,7 @@ figure and the caller opted in) → remember. Full component breakdown and desig
 | Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) in prod, in-memory `MemorySaver` in dev — same split as session storage above |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 58 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 63 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -189,7 +194,7 @@ correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
 
-**Current status:** metric logic is fully unit-tested (58/58 passing,
+**Current status:** metric logic is fully unit-tested (63/63 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -200,7 +205,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 58 tests, ~15s (after first model download), no network required
+pytest -q          # 63 tests, ~15s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```

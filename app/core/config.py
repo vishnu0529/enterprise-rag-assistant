@@ -8,6 +8,14 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
+    # LLM call resilience — see app/services/llm_client.py. Neither provider
+    # client had an explicit timeout before this, so a hung connection could
+    # hang a /chat request indefinitely. Retries use each SDK's own native
+    # exponential backoff (HttpRetryOptions / httpx-based), not a hand-rolled
+    # loop — LLM_MAX_RETRIES is retry *attempts*, so 2 means up to 3 calls total.
+    LLM_TIMEOUT_SECONDS: int = 30
+    LLM_MAX_RETRIES: int = 2
+
     # Embeddings
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 

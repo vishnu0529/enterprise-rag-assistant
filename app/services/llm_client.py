@@ -16,12 +16,43 @@ class LLMResult:
     completion_tokens: int
 
 
+def _google_client():
+    from google import genai
+    from google.genai import types
+
+    # Neither timeout nor retry existed before — a hung connection could
+    # hang a /chat request indefinitely. Uses the SDK's own retry transport
+    # (exponential backoff, jittered) rather than a hand-rolled loop.
+    http_options = types.HttpOptions(
+        timeout=settings.LLM_TIMEOUT_SECONDS * 1000,  # genai takes milliseconds
+        retry_options=types.HttpRetryOptions(
+            attempts=settings.LLM_MAX_RETRIES + 1,  # attempts includes the first try
+            initial_delay=1.0,
+            max_delay=10.0,
+            exp_base=2.0,
+            jitter=0.5,
+        ),
+    )
+    return genai.Client(api_key=settings.GOOGLE_API_KEY, http_options=http_options)
+
+
+def _anthropic_client():
+    import anthropic
+
+    # timeout + max_retries are native httpx-transport options on this SDK —
+    # same exponential-backoff-with-jitter behaviour as the Google branch,
+    # just configured through the vendor's own mechanism instead of ours.
+    return anthropic.Anthropic(
+        api_key=settings.ANTHROPIC_API_KEY,
+        timeout=float(settings.LLM_TIMEOUT_SECONDS),
+        max_retries=settings.LLM_MAX_RETRIES,
+    )
+
+
 def call_llm(system: str, user: str, max_tokens: int = 2048) -> LLMResult:
     provider = settings.LLM_PROVIDER.lower()
     if provider == "google":
-        from google import genai
-
-        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        client = _google_client()
         prompt = f"{system}\n\n{user}"
         response = client.models.generate_content(
             model=settings.LLM_MODEL,
@@ -36,9 +67,7 @@ def call_llm(system: str, user: str, max_tokens: int = 2048) -> LLMResult:
             completion_tokens=completion_tokens,
         )
     elif provider == "anthropic":
-        import anthropic
-
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = _anthropic_client()
         msg = client.messages.create(
             model=settings.LLM_MODEL,
             max_tokens=max_tokens,

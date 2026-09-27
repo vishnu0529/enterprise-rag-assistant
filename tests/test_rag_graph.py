@@ -1,6 +1,8 @@
 from contextlib import ExitStack
 from unittest.mock import patch
 
+import pytest
+
 from app.services.llm_client import LLMResult
 from app.services.rag_graph import (
     DEFAULT_MAX_RETRIES,
@@ -345,3 +347,33 @@ def test_resume_approval_rejected_replaces_the_answer_with_a_banner():
     assert "Not released" in result["answer"]
     assert "Rate under renegotiation" in result["answer"]
     assert PRICEY_LLM_RESULT.text not in result["answer"]
+
+
+def test_resume_approval_raises_when_nothing_is_actually_paused():
+    """A thread whose most recent turn already finished — whether or not
+    that turn ever paused — must reject a resume attempt. Without the
+    interrupts check in resume_approval(), Command(resume=...) on a
+    finished thread doesn't error: LangGraph just replays the checkpoint at
+    END and hands back the old answer as if the resume "worked", which
+    would let a client silently re-post the same answer for an unrelated
+    or already-resolved turn."""
+    session_id = "test-approval-nothing-pending"
+    with ExitStack() as stack:
+        apply_patches(
+            stack,
+            call_llm=lambda *a, **k: LLMResult(
+                text="No price here. [Source 1]", prompt_tokens=1, completion_tokens=1
+            ),
+        )
+        finished = answer_question_agentic(
+            "How many annual leave days?", session_id=session_id, require_approval=False
+        )
+        assert finished["pending_approval"] is False
+
+        with pytest.raises(KeyError):
+            resume_approval(session_id, approved=True)
+
+
+def test_resume_approval_raises_for_a_session_that_never_existed():
+    with pytest.raises(KeyError):
+        resume_approval("session-that-never-ran-anything", approved=True)
