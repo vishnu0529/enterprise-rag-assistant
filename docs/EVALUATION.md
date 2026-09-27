@@ -92,5 +92,37 @@ python scripts/run_golden_set.py
 This ingests the full corpus, runs every item through the real
 corrective-RAG graph, and writes `eval/golden_set_results.md` — pass/fail
 per item, with faithfulness/context-recall for answerable items and a
-refusal check for traps. The script exits non-zero if any trap is answered
-instead of refused, which is what makes it usable as a CI merge gate later.
+refusal check for traps, plus p95 latency and an illustrative cost estimate.
+It also appends a record to `eval/metrics_history.jsonl` and rewrites
+`eval/golden_set_metrics.json` (a shields.io endpoint-badge payload). The
+script exits non-zero if any trap is answered instead of refused.
+
+## CI merge gate
+
+`.github/workflows/ci.yml` has an `eval-gate` job, after `test`, that runs
+`scripts/run_golden_set.py` on every push and pull request — but only when a
+`GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` repository secret is configured; if
+neither secret is set, the job skips with a clear message instead of failing
+the build for contributors who don't have one. **To make this a real,
+active merge gate:**
+
+1. Add `GOOGLE_API_KEY` (or `ANTHROPIC_API_KEY`) as a repository secret
+   (Settings → Secrets and variables → Actions).
+2. Mark `eval-gate` as a required status check under branch protection for
+   `main` (Settings → Branches) — this repo does not enable that
+   automatically, since it changes what can block a merge and is a call for
+   whoever owns the repo to make deliberately, not something to switch on
+   silently.
+
+Once the secret is set, a separate `publish-eval-metrics` job — running only
+on pushes to `main`, after `eval-gate` passes — runs
+`scripts/update_eval_chart.py` and commits the refreshed
+`eval/golden_set_metrics.json`, `eval/metrics_history.jsonl`, and this file's
+trend chart back to `main`. That's what makes the badge and chart below move
+on their own after every merge, rather than being a hand-updated snapshot.
+
+### Trend
+
+<!-- EVAL_TREND_START -->
+_No CI runs recorded yet — this section fills in once `scripts/run_golden_set.py` has run at least once with a live API key (see above) and committed to `eval/metrics_history.jsonl`._
+<!-- EVAL_TREND_END -->

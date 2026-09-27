@@ -12,13 +12,21 @@ score well on faithfulness against context it retrieved for the wrong
 reasons, but it cannot fake a correct refusal on a question the corpus
 genuinely doesn't answer.
 
+Also logs cost-per-run and p95 latency, appends a record to
+eval/metrics_history.jsonl, and writes eval/golden_set_metrics.json in
+shields.io's endpoint-badge format — CI updates both on every run to main,
+which is what makes the README badge and trend chart move over time instead
+of being a one-off snapshot.
+
 Usage:
     ./venv/bin/python scripts/run_golden_set.py
 """
 
 import json
 import statistics
+import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -31,6 +39,10 @@ from app.services.vector_store import upsert_chunks
 
 MIN_FAITHFULNESS = 0.7
 MIN_CONTEXT_RECALL = 0.5
+
+# Illustrative only, NOT official pricing — same rates as scripts/run_evaluation.py.
+COST_PER_1K_PROMPT_TOKENS_USD = 0.000075
+COST_PER_1K_COMPLETION_TOKENS_USD = 0.0003
 
 REFUSAL_MARKERS = (
     "doesn't cover",
@@ -48,6 +60,26 @@ REFUSAL_MARKERS = (
 def _is_refusal(answer: str) -> bool:
     lowered = answer.lower()
     return any(marker in lowered for marker in REFUSAL_MARKERS)
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    k = (len(s) - 1) * (pct / 100)
+    f, c = int(k), min(int(k) + 1, len(s) - 1)
+    if f == c:
+        return s[f]
+    return s[f] + (s[c] - s[f]) * (k - f)
+
+
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _ingest_corpus() -> None:
@@ -69,6 +101,8 @@ def _score_answerable(item: dict) -> dict:
         "context_recall": result.context_recall,
         "answer_relevancy": result.answer_relevancy,
         "latency_ms": result.latency_ms,
+        "prompt_tokens": result.prompt_tokens,
+        "completion_tokens": result.completion_tokens,
         "answer": result.answer,
     }
 
@@ -81,6 +115,8 @@ def _score_trap(item: dict) -> dict:
         "category": "trap",
         "passed": passed,
         "latency_ms": result["latency_ms"],
+        "prompt_tokens": result.get("prompt_tokens", 0),
+        "completion_tokens": result.get("completion_tokens", 0),
         "answer": result["answer"],
     }
 
@@ -158,15 +194,67 @@ def main() -> None:
             f"- Answer relevancy: {avg_relevancy:.2f}",
         ]
 
+    latencies = [r["latency_ms"] for r in results]
+    p95_latency = _percentile(latencies, 95)
+    mean_latency = statistics.mean(latencies)
+    total_prompt_tokens = sum(r.get("prompt_tokens", 0) for r in results)
+    total_completion_tokens = sum(r.get("completion_tokens", 0) for r in results)
+    total_cost = (
+        total_prompt_tokens / 1000 * COST_PER_1K_PROMPT_TOKENS_USD
+        + total_completion_tokens / 1000 * COST_PER_1K_COMPLETION_TOKENS_USD
+    )
+
+    lines += [
+        "",
+        "**Cost and latency**",
+        "",
+        f"- p95 latency: {p95_latency:.0f} ms (mean: {mean_latency:.0f} ms)",
+        f"- Total tokens: {total_prompt_tokens} prompt + {total_completion_tokens} completion",
+        f"- Estimated cost (illustrative pricing, not official rates): ${total_cost:.5f}",
+    ]
+
     failed = [r for r in results if not r["passed"]]
     if failed:
         lines += ["", "## Failed items (for debugging)", ""]
         for r in failed:
             lines.append(f"- **{r['id']}**: {r['answer'][:200]}")
 
-    out_path = Path(__file__).resolve().parent.parent / "eval" / "golden_set_results.md"
+    eval_dir = Path(__file__).resolve().parent.parent / "eval"
+    out_path = eval_dir / "golden_set_results.md"
     out_path.write_text("\n".join(lines) + "\n")
     print(f"\n{n_pass}/{len(items)} passed. Wrote results to {out_path}")
+
+    pct = round(100 * n_pass / len(items))
+    if pct == 100:
+        color = "brightgreen"
+    elif pct >= 90:
+        color = "green"
+    elif pct >= 75:
+        color = "yellow"
+    else:
+        color = "red"
+    badge = {
+        "schemaVersion": 1,
+        "label": "golden set",
+        "message": f"{n_pass}/{len(items)} ({pct}%)",
+        "color": color,
+    }
+    (eval_dir / "golden_set_metrics.json").write_text(json.dumps(badge, indent=2) + "\n")
+
+    history_record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "commit": _git_sha(),
+        "n_items": len(items),
+        "n_pass": n_pass,
+        "n_traps": len(trap_results),
+        "n_trap_pass": n_trap_pass,
+        "pass_rate_pct": pct,
+        "p95_latency_ms": round(p95_latency, 1),
+        "mean_latency_ms": round(mean_latency, 1),
+        "total_cost_usd": round(total_cost, 5),
+    }
+    with (eval_dir / "metrics_history.jsonl").open("a") as f:
+        f.write(json.dumps(history_record) + "\n")
 
     if n_trap_pass < len(trap_results):
         sys.exit(1)

@@ -42,3 +42,86 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build Docker image
         run: docker build -t enterprise-rag-assistant:ci .
+
+  eval-gate:
+    runs-on: ubuntu-latest
+    needs: test
+    env:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check for an LLM API key
+        id: check_key
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::notice::No GOOGLE_API_KEY or ANTHROPIC_API_KEY secret configured — skipping the golden-set eval gate. See docs/EVALUATION.md#ci-merge-gate to enable it."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run golden-set eval gate
+        if: steps.check_key.outputs.skip != 'true'
+        run: python scripts/run_golden_set.py
+      - name: Upload golden-set results
+        if: steps.check_key.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-set-results
+          path: |
+            eval/golden_set_results.md
+            eval/golden_set_metrics.json
+            eval/metrics_history.jsonl
+
+  publish-eval-metrics:
+    # Reuses eval-gate's own run instead of re-running the golden set against
+    # a live LLM a second time — this job only spends tokens on the chart
+    # regeneration, which needs no model calls at all.
+    runs-on: ubuntu-latest
+    needs: eval-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    env:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Check for an LLM API key
+        id: check_key
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download eval-gate's results
+        if: steps.check_key.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: golden-set-results
+          path: eval/
+      - name: Regenerate the trend chart
+        if: steps.check_key.outputs.skip != 'true'
+        run: python scripts/update_eval_chart.py
+      - name: Commit updated eval metrics
+        if: steps.check_key.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add eval/golden_set_metrics.json eval/metrics_history.jsonl eval/golden_set_results.md docs/EVALUATION.md
+          git diff --cached --quiet || git commit -m "Update golden-set eval metrics [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
