@@ -71,6 +71,25 @@ def test_answer_question_returns_citations_and_metrics():
     mock_call_llm.assert_called_once()
 
 
+def test_answer_question_surfaces_cache_usage():
+    fake_llm_result = LLMResult(
+        text="ok",
+        prompt_tokens=50,
+        completion_tokens=10,
+        cache_creation_tokens=30,
+        cache_read_tokens=1200,
+    )
+
+    with (
+        patch("app.services.rag_chain.search", return_value=SAMPLE_CHUNKS),
+        patch("app.services.rag_chain.call_llm", return_value=fake_llm_result),
+    ):
+        result = answer_question("How many annual leave days?")
+
+    assert result["cache_creation_tokens"] == 30
+    assert result["cache_read_tokens"] == 1200
+
+
 def test_answer_question_passes_history_into_prompt():
     fake_llm_result = LLMResult(text="ok", prompt_tokens=1, completion_tokens=1)
     history = [{"role": "user", "content": "earlier question"}]

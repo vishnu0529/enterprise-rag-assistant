@@ -21,6 +21,8 @@ def _to_response(session_id: str, result: dict) -> ChatResponse:
         latency_ms=result.get("latency_ms", 0.0),
         prompt_tokens=result.get("prompt_tokens", 0),
         completion_tokens=result.get("completion_tokens", 0),
+        cache_creation_tokens=result.get("cache_creation_tokens", 0),
+        cache_read_tokens=result.get("cache_read_tokens", 0),
         faithfulness_score=result.get("faithfulness_score"),
         retries=result.get("retries", 0),
         escalated=result.get("escalated", False),

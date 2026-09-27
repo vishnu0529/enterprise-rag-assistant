@@ -36,11 +36,13 @@ def test_timeout_and_retries_are_configurable_via_settings():
     assert http_options.retry_options.attempts == 5
 
 
-def _mock_anthropic_response():
+def _mock_anthropic_response(cache_creation_input_tokens=0, cache_read_input_tokens=0):
     response = MagicMock()
     response.content = [MagicMock(text="answer")]
     response.usage.input_tokens = 10
     response.usage.output_tokens = 5
+    response.usage.cache_creation_input_tokens = cache_creation_input_tokens
+    response.usage.cache_read_input_tokens = cache_read_input_tokens
     return response
 
 
@@ -73,3 +75,33 @@ def test_anthropic_long_system_prompt_gets_cache_control():
     assert kwargs["system"] == [
         {"type": "text", "text": long_prompt, "cache_control": {"type": "ephemeral"}}
     ]
+
+
+def test_anthropic_cache_usage_is_read_from_the_response():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response(
+        cache_creation_input_tokens=123, cache_read_input_tokens=456
+    )
+
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+    ):
+        result = call_llm("short system prompt", "question")
+
+    assert result.cache_creation_tokens == 123
+    assert result.cache_read_tokens == 456
+
+
+def test_anthropic_cache_usage_defaults_to_zero_when_absent():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+    ):
+        result = call_llm("short system prompt", "question")
+
+    assert result.cache_creation_tokens == 0
+    assert result.cache_read_tokens == 0

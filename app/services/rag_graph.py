@@ -231,6 +231,8 @@ def no_documents_node(state: RagAgentState) -> dict:
         "citations": [],
         "prompt_tokens": state.get("prompt_tokens", 0),
         "completion_tokens": state.get("completion_tokens", 0),
+        "cache_creation_tokens": state.get("cache_creation_tokens", 0),
+        "cache_read_tokens": state.get("cache_read_tokens", 0),
     }
 
 
@@ -269,6 +271,8 @@ def draft_node(state: RagAgentState) -> dict:
         answer = result.text
         prompt_tokens = result.prompt_tokens
         completion_tokens = result.completion_tokens
+        cache_creation_tokens = result.cache_creation_tokens
+        cache_read_tokens = result.cache_read_tokens
         llm_error = False
     except Exception as e:
         # Full traceback goes to logs (server-side only) so a real cause
@@ -281,6 +285,8 @@ def draft_node(state: RagAgentState) -> dict:
         )
         prompt_tokens = 0
         completion_tokens = 0
+        cache_creation_tokens = 0
+        cache_read_tokens = 0
         llm_error = True
 
     # Plain dicts, not Citation objects — graph state gets msgpack-serialized
@@ -309,6 +315,8 @@ def draft_node(state: RagAgentState) -> dict:
         "citations": citations,
         "prompt_tokens": state.get("prompt_tokens", 0) + prompt_tokens,
         "completion_tokens": state.get("completion_tokens", 0) + completion_tokens,
+        "cache_creation_tokens": state.get("cache_creation_tokens", 0) + cache_creation_tokens,
+        "cache_read_tokens": state.get("cache_read_tokens", 0) + cache_read_tokens,
         "llm_error": llm_error,
     }
 
@@ -493,6 +501,8 @@ def _build_result(result: dict, latency_ms: float) -> dict:
             "latency_ms": latency_ms,
             "prompt_tokens": result.get("prompt_tokens", 0),
             "completion_tokens": result.get("completion_tokens", 0),
+            "cache_creation_tokens": result.get("cache_creation_tokens", 0),
+            "cache_read_tokens": result.get("cache_read_tokens", 0),
             "cost_usd": cost_usd,
             "contexts": [c["text"] for c in result.get("chunks", [])],
             "faithfulness_score": result.get("faithfulness_score"),
@@ -511,6 +521,8 @@ def _build_result(result: dict, latency_ms: float) -> dict:
         "latency_ms": latency_ms,
         "prompt_tokens": result.get("prompt_tokens", 0),
         "completion_tokens": result.get("completion_tokens", 0),
+        "cache_creation_tokens": result.get("cache_creation_tokens", 0),
+        "cache_read_tokens": result.get("cache_read_tokens", 0),
         "cost_usd": cost_usd,
         "contexts": [c["text"] for c in result.get("chunks", [])],
         "faithfulness_score": result.get("faithfulness_score"),
@@ -554,6 +566,8 @@ def answer_question_agentic(
         "require_approval": require_approval,
         "prompt_tokens": 0,
         "completion_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0,
         "retry_count": 0,
         "max_retries": DEFAULT_MAX_RETRIES,
     }
@@ -573,6 +587,8 @@ def answer_question_agentic(
         built = _build_result(result, latency_ms)
         span.set_attribute("rag.latency_ms", latency_ms)
         span.set_attribute("rag.cost_usd", built["cost_usd"])
+        span.set_attribute("rag.cache_creation_tokens", built["cache_creation_tokens"])
+        span.set_attribute("rag.cache_read_tokens", built["cache_read_tokens"])
         span.set_attribute("rag.pending_approval", built["pending_approval"])
     return built
 
@@ -608,4 +624,6 @@ def resume_approval(session_id: str, approved: bool, reason: str | None = None) 
         built = _build_result(result, latency_ms)
         span.set_attribute("rag.latency_ms", latency_ms)
         span.set_attribute("rag.cost_usd", built["cost_usd"])
+        span.set_attribute("rag.cache_creation_tokens", built["cache_creation_tokens"])
+        span.set_attribute("rag.cache_read_tokens", built["cache_read_tokens"])
     return built

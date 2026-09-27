@@ -34,6 +34,8 @@ class RagAgentState(TypedDict, total=False):
     citations: list[dict]  # plain dicts, not Citation Pydantic objects — see draft_node
     prompt_tokens: int
     completion_tokens: int
+    cache_creation_tokens: int  # cumulative Anthropic cache-write tokens (see llm_client.py)
+    cache_read_tokens: int  # cumulative Anthropic cache-read tokens across retries
     llm_error: bool  # True if the Drafting Agent's LLM call itself raised (e.g. quota/network) —
     # signals critique/retry/remember to skip rather than retry a failure retrying can't fix
 

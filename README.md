@@ -45,11 +45,27 @@ either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
 | Data-boundary control | None — [a real tuition-payment letter with bank details reached the public demo](docs/DEPLOYMENT.md) and had to be manually deleted | Ingestion scans for UK sort codes/account numbers/NI numbers and rejects by default (`DATA_BOUNDARY_MODE=block`) |
 | Recovery from a bad state | Manual reconstruction | `scripts/rollback.py [git-ref]` — one command, verified against both the working tree and a specific past commit |
 
-Scale: 4 commits, 33 files touched, +1,545/-95 lines since `968144b`
-(`git diff --stat 968144b HEAD`).
+That covered evals, hardening, and honesty. A second pass then went further —
+from a RAG pipeline that answers questions to a multi-agent system that can
+survive a process being killed mid-conversation and won't release a
+commercial figure without a human saying so:
+
+| | Before this pass | Now (`HEAD`) |
+|---|---|---|
+| Checkpointing | In-memory only — a killed process loses the conversation | `PostgresSaver` in prod; verified with a real two-process, real-`SIGKILL` demonstration (`scripts/demo_kill_and_resume.py`), not just claimed |
+| Human oversight | A written warning banner on a bad answer | A genuine LangGraph `interrupt()` halt on any answer quoting a £ figure, opt-in, resumed via `POST /chat/{session_id}/approve` |
+| Tracing | None | OpenTelemetry span per graph node + one parent span per request, verified against OTel's own in-memory exporter |
+| Failure modes | Handled in code, not written down anywhere | `docs/FAILURE_MODES.md` — every mode, organised by category, each with a code/test reference |
+| Config/prompt version | Not traceable to a specific past answer | Every answer carries the exact git commit that produced it (`code_version`) |
+| LLM resilience | No timeout — a hung connection could hang a request indefinitely | Explicit timeout + native SDK backoff (Google `HttpRetryOptions`, Anthropic `timeout`/`max_retries`) |
+| Graph diagram | Hand-drawn Mermaid, could drift from the real code | `docs/graph.png`, rendered directly from the compiled `StateGraph` object |
+| Tests | 50 passing | 73 passing (+23) |
+
+Scale across both passes: 11 commits, 47 files touched, +2,777/-163 lines
+since `968144b` (`git diff --stat 968144b HEAD`).
 
 **What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall
-scores, golden-set pass rate, p95 latency, and per-task cost all require a real
+scores, golden-set pass rate, p50/p95 latency, and per-task cost all require a real
 LLM API call, and this project's own key is currently quota-limited (see
 [docs/EVALUATION.md](docs/EVALUATION.md)) — the badge and chart there read
 "pending live run" rather than a made-up number. Standing rule for this repo:

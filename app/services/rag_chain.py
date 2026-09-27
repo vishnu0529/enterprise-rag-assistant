@@ -64,6 +64,8 @@ def answer_question(
             "latency_ms": (time.perf_counter() - start) * 1000,
             "prompt_tokens": 0,
             "completion_tokens": 0,
+            "cache_creation_tokens": 0,
+            "cache_read_tokens": 0,
             "contexts": [],
         }
 
@@ -98,5 +100,7 @@ def answer_question(
         "latency_ms": latency_ms,
         "prompt_tokens": result.prompt_tokens,
         "completion_tokens": result.completion_tokens,
+        "cache_creation_tokens": result.cache_creation_tokens,
+        "cache_read_tokens": result.cache_read_tokens,
         "contexts": [c["text"] for c in chunks],
     }

@@ -73,6 +73,8 @@ class ChatResponse(BaseModel):
     latency_ms: float
     prompt_tokens: int
     completion_tokens: int
+    cache_creation_tokens: int = 0  # Anthropic prompt-cache write tokens — see llm_client.py
+    cache_read_tokens: int = 0  # Anthropic prompt-cache read tokens (0 unless caching engaged)
     faithfulness_score: float | None = None  # None only for the no-documents short-circuit
     retries: int = 0  # how many times the critique sent the Strategist back to re-plan
     escalated: bool = False  # retries exhausted and still ungrounded/uncited — needs human review

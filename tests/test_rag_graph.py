@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
+import tests.test_rag_graph as _this_module
 from app.services.llm_client import LLMResult
 from app.services.rag_graph import (
     DEFAULT_MAX_RETRIES,
@@ -10,6 +11,32 @@ from app.services.rag_graph import (
     answer_question_agentic,
     resume_approval,
 )
+
+
+@pytest.fixture(autouse=True)
+def _unique_thread_per_test(request, monkeypatch):
+    """thread_id is session-scoped now (see rag_graph.py — durable
+    checkpointing only means anything if a resumed run continues the same
+    conversation). Real callers always pass a fresh UUID session_id per
+    conversation (chat.py), so this collision can't happen in production —
+    but most of these tests predate that change and never pass session_id,
+    so without this they'd all silently share one "no-session" thread and
+    resume each other's checkpoints instead of starting fresh. Give every
+    test its own thread via its own name; a test that explicitly passes
+    session_id (e.g. the approval-gate resume tests, which need two calls
+    on the *same* thread) is left alone."""
+
+    def _auto_session_id(fn):
+        def wrapper(*args, **kwargs):
+            kwargs.setdefault("session_id", request.node.name)
+            return fn(*args, **kwargs)
+
+        return wrapper
+
+    monkeypatch.setattr(
+        _this_module, "answer_question_agentic", _auto_session_id(answer_question_agentic)
+    )
+
 
 SAMPLE_CHUNKS = [
     {
@@ -81,6 +108,43 @@ def test_answers_without_retry_when_faithful_first_time():
     assert result["retries"] == 0
     mocks["call_llm"].assert_called_once()  # drafting agent ran exactly once
     mocks["call_llm_json"].assert_called_once()  # strategist ran exactly once, not re-planning
+
+
+def test_cache_tokens_are_surfaced_in_the_final_result():
+    cached_llm_result = LLMResult(
+        text="You get 25 days of annual leave. [Source 1]",
+        prompt_tokens=100,
+        completion_tokens=15,
+        cache_creation_tokens=50,
+        cache_read_tokens=200,
+    )
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: cached_llm_result)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["cache_creation_tokens"] == 50
+    assert result["cache_read_tokens"] == 200
+
+
+def test_cache_tokens_accumulate_across_retries():
+    results = iter(
+        [
+            LLMResult(text="draft 1", prompt_tokens=10, completion_tokens=5, cache_read_tokens=100),
+            LLMResult(text="draft 2", prompt_tokens=10, completion_tokens=5, cache_read_tokens=100),
+            LLMResult(text="draft 3", prompt_tokens=10, completion_tokens=5, cache_read_tokens=100),
+        ]
+    )
+    scores = iter([0.3, 0.3, 0.9])
+    with ExitStack() as stack:
+        apply_patches(
+            stack,
+            call_llm=lambda *a, **k: next(results),
+            score_faithfulness=lambda *a, **k: next(scores),
+        )
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["retries"] == 2
+    assert result["cache_read_tokens"] == 300  # accumulated across 1 initial + 2 retries
 
 
 def test_retries_send_strategist_back_to_replan_until_it_passes():

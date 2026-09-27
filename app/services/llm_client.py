@@ -23,6 +23,11 @@ class LLMResult:
     text: str
     prompt_tokens: int
     completion_tokens: int
+    # 0 on every non-Anthropic provider and on any Anthropic call whose system
+    # prompt didn't cross the caching threshold above — these only become
+    # nonzero once a cache write or read actually happens.
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
 
 
 def _google_client():
@@ -92,6 +97,8 @@ def call_llm(system: str, user: str, max_tokens: int = 2048) -> LLMResult:
             text=msg.content[0].text,
             prompt_tokens=msg.usage.input_tokens,
             completion_tokens=msg.usage.output_tokens,
+            cache_creation_tokens=getattr(msg.usage, "cache_creation_input_tokens", 0) or 0,
+            cache_read_tokens=getattr(msg.usage, "cache_read_input_tokens", 0) or 0,
         )
     else:
         raise ValueError(f"Unknown LLM_PROVIDER: {provider}")
