@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector%20store-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![Gemini](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![Tests](https://img.shields.io/badge/tests-71%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-78%20passing-brightgreen)](tests/)
 [![Golden Set](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/vishnu0529/enterprise-rag-assistant/main/eval/golden_set_metrics.json)](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -34,7 +34,7 @@ changed converting it into a bid-team proposal-response tool — every number is
 either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
 `git show` against the exact pre-hardening commit (`968144b`), not an estimate.
 
-| | Before (`968144b`) | Now (`HEAD`) |
+| | Before (`968144b`) | After the first pass |
 |---|---|---|
 | Corpus | 1 generic document, 2 chunks | 7 domain documents (capability statement, 2 past proposals, case studies, CVs, rate card, terms), 33 chunks |
 | Tests | 31 passing | 50 passing (+19) |
@@ -59,9 +59,9 @@ commercial figure without a human saying so:
 | Config/prompt version | Not traceable to a specific past answer | Every answer carries the exact git commit that produced it (`code_version`) |
 | LLM resilience | No timeout — a hung connection could hang a request indefinitely | Explicit timeout + native SDK backoff (Google `HttpRetryOptions`, Anthropic `timeout`/`max_retries`) |
 | Graph diagram | Hand-drawn Mermaid, could drift from the real code | `docs/graph.png`, rendered directly from the compiled `StateGraph` object |
-| Tests | 50 passing | 73 passing (+23) |
+| Tests | 50 passing | 78 passing (+28) |
 
-Scale across both passes: 11 commits, 47 files touched, +2,777/-163 lines
+Scale across both passes: 13 commits, 48 files touched, +2,943/-163 lines
 since `968144b` (`git diff --stat 968144b HEAD`).
 
 **What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall
@@ -122,8 +122,8 @@ flowchart LR
     Qdrant --> Drafter[Drafting Agent<br/>writes from evidence]
     Drafter --> LLM[Gemini / Claude]
     Drafter -.critique fails: re-plan.-> Strategist
-    Drafter --> Escalate{{escalate: still bad<br/>after retries?}}
-    Escalate --> Approval{{approval_gate:<br/>interrupt() if priced}}
+    Drafter --> Escalate{{"escalate: still bad<br/>after retries?"}}
+    Escalate --> Approval{{"approval_gate:<br/>interrupt() if priced"}}
     Approval -.human decides.-> API
     Strategist --> Memory[(User Memory<br/>Qdrant, per user_id)]
     API --> DB[(Sessions + Documents<br/>SQLite dev / Postgres prod)]
@@ -153,7 +153,7 @@ figure and the caller opted in) → remember. Full component breakdown and desig
 | Tracing | OpenTelemetry — one span per graph node, console exporter in dev / OTLP to any real backend in prod (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
-| Testing | pytest, 71 tests, all mocked (no network/model load in CI) |
+| Testing | pytest, 78 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
 | CI | GitHub Actions (lint → test → docker build) |
@@ -213,7 +213,7 @@ correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
 
-**Current status:** metric logic is fully unit-tested (71/71 passing,
+**Current status:** metric logic is fully unit-tested (78/78 passing,
 including known-hallucination and judge-failure cases, the retry/cap/memory
 loop, and multi-hop sub-query merging/deduplication) and the whole pipeline
 was verified end-to-end with a mocked LLM. A live run against this project's
@@ -224,7 +224,7 @@ the exact error, and the eval set: **[docs/EVALUATION.md](docs/EVALUATION.md)**.
 ## Running Tests
 
 ```bash
-pytest -q          # 71 tests, ~15s (after first model download), no network required
+pytest -q          # 78 tests, ~5s (after first model download), no network required
 ruff check .        # lint
 ruff format --check .  # formatting
 ```
