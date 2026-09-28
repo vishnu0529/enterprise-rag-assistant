@@ -32,9 +32,9 @@ This started as a generic single-document Q&A demo (`sample_docs/company_handboo
 an employee handbook, no domain, no hardening). The table below is what actually
 changed converting it into a bid-team proposal-response tool. Every number is
 either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
-`git show` against the exact pre-hardening commit (`968144b`), not an estimate.
+`git show` against the exact pre-hardening commit (`d2e0092`), not an estimate.
 
-| | Before (`968144b`) | After the first pass |
+| | Before (`d2e0092`) | After the first pass |
 |---|---|---|
 | Corpus | 1 generic document, 2 chunks | 7 domain documents (capability statement, 2 past proposals, case studies, CVs, rate card, terms), 33 chunks |
 | Tests | 31 passing | 50 passing (+19) |
@@ -61,8 +61,8 @@ commercial figure without a human saying so:
 | Graph diagram | Hand-drawn Mermaid, could drift from the real code | `docs/graph.png`, rendered directly from the compiled `StateGraph` object |
 | Tests | 50 passing | 78 passing (+28) |
 
-Scale across both passes: 15 commits, 53 files touched, +3,014/-235 lines
-since `968144b` (`git diff --stat 968144b HEAD`).
+Scale across both passes: 16 commits, 53 files touched, +3,014/-235 lines
+since `d2e0092` (`git diff --stat d2e0092 HEAD`).
 
 **What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall
 scores, golden-set pass rate, p50/p95 latency, and per-task cost all require a real
