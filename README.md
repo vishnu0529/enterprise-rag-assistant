@@ -11,18 +11,18 @@
 > Production-style Retrieval-Augmented Generation for a professional-services
 > bid team: drafts answers to RFP and proposal questions from a firm's own
 > capability statement, past proposals, team credentials, rate card, and
-> standard terms, every claim cited back to a source — and a rigorous
+> standard terms, every claim cited back to a source, and a rigorous
 > evaluation suite, not just another RAG demo. Most portfolios stop at
 > retrieval + generation; this one also measures whether the answers are
 > actually good, and refuses to answer what the corpus doesn't support.
 
-**Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate — the demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
+**Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate. The demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
 
 Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Failure Modes](docs/FAILURE_MODES.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
 
 <p align="center"><img src="docs/graph.png" alt="The real compiled corrective-RAG graph" width="360"></p>
 
-<p align="center"><sub>Rendered directly from the live <code>StateGraph</code> object via <code>scripts/render_graph.py</code> — not hand-drawn, so it can't silently drift out of sync with the actual node/edge structure. Rerun the script after any change to <code>build_graph()</code>.</sub></p>
+<p align="center"><sub>Rendered directly from the live <code>StateGraph</code> object via <code>scripts/render_graph.py</code>, not hand-drawn, so it can't silently drift out of sync with the actual node/edge structure. Rerun the script after any change to <code>build_graph()</code>.</sub></p>
 
 ---
 
@@ -30,7 +30,7 @@ Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.
 
 This started as a generic single-document Q&A demo (`sample_docs/company_handbook.md`,
 an employee handbook, no domain, no hardening). The table below is what actually
-changed converting it into a bid-team proposal-response tool — every number is
+changed converting it into a bid-team proposal-response tool. Every number is
 either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
 `git show` against the exact pre-hardening commit (`968144b`), not an estimate.
 
@@ -40,24 +40,24 @@ either a live command you can rerun (`pytest -q`, `git diff --stat`) or a
 | Tests | 31 passing | 50 passing (+19) |
 | CI jobs | 3 (`lint`, `test`, `docker-build`) | 5 (+ `eval-gate`, `publish-eval-metrics`) |
 | Hallucination testing | None | 50-item golden set: 38 answerable + 12 deliberate refusal traps |
-| Citation enforcement | None — an uncited answer was indistinguishable from a cited one | `critique_node` retries, then escalates, any answer missing a `[Source N]` marker |
-| Escalation on low confidence | None — a low-faithfulness answer after retries was returned exactly like a good one | Visible "needs bid-director review" banner + `escalated: true` on the response |
-| Data-boundary control | None — [a real tuition-payment letter with bank details reached the public demo](docs/DEPLOYMENT.md) and had to be manually deleted | Ingestion scans for UK sort codes/account numbers/NI numbers and rejects by default (`DATA_BOUNDARY_MODE=block`) |
-| Recovery from a bad state | Manual reconstruction | `scripts/rollback.py [git-ref]` — one command, verified against both the working tree and a specific past commit |
+| Citation enforcement | None. An uncited answer was indistinguishable from a cited one | `critique_node` retries, then escalates, any answer missing a `[Source N]` marker |
+| Escalation on low confidence | None. A low-faithfulness answer after retries was returned exactly like a good one | Visible "needs bid-director review" banner + `escalated: true` on the response |
+| Data-boundary control | None. [A real tuition-payment letter with bank details reached the public demo](docs/DEPLOYMENT.md) and had to be manually deleted | Ingestion scans for UK sort codes/account numbers/NI numbers and rejects by default (`DATA_BOUNDARY_MODE=block`) |
+| Recovery from a bad state | Manual reconstruction | `scripts/rollback.py [git-ref]`, one command, verified against both the working tree and a specific past commit |
 
-That covered evals, hardening, and honesty. A second pass then went further —
+That covered evals, hardening, and honesty. A second pass then went further:
 from a RAG pipeline that answers questions to a multi-agent system that can
 survive a process being killed mid-conversation and won't release a
 commercial figure without a human saying so:
 
 | | Before this pass | Now (`HEAD`) |
 |---|---|---|
-| Checkpointing | In-memory only — a killed process loses the conversation | `PostgresSaver` in prod; verified with a real two-process, real-`SIGKILL` demonstration (`scripts/demo_kill_and_resume.py`), not just claimed |
+| Checkpointing | In-memory only. A killed process loses the conversation | `PostgresSaver` in prod; verified with a real two-process, real-`SIGKILL` demonstration (`scripts/demo_kill_and_resume.py`), not just claimed |
 | Human oversight | A written warning banner on a bad answer | A genuine LangGraph `interrupt()` halt on any answer quoting a £ figure, opt-in, resumed via `POST /chat/{session_id}/approve` |
 | Tracing | None | OpenTelemetry span per graph node + one parent span per request, verified against OTel's own in-memory exporter |
-| Failure modes | Handled in code, not written down anywhere | `docs/FAILURE_MODES.md` — every mode, organised by category, each with a code/test reference |
+| Failure modes | Handled in code, not written down anywhere | `docs/FAILURE_MODES.md`: every mode, organised by category, each with a code/test reference |
 | Config/prompt version | Not traceable to a specific past answer | Every answer carries the exact git commit that produced it (`code_version`) |
-| LLM resilience | No timeout — a hung connection could hang a request indefinitely | Explicit timeout + native SDK backoff (Google `HttpRetryOptions`, Anthropic `timeout`/`max_retries`) |
+| LLM resilience | No timeout. A hung connection could hang a request indefinitely | Explicit timeout + native SDK backoff (Google `HttpRetryOptions`, Anthropic `timeout`/`max_retries`) |
 | Graph diagram | Hand-drawn Mermaid, could drift from the real code | `docs/graph.png`, rendered directly from the compiled `StateGraph` object |
 | Tests | 50 passing | 78 passing (+28) |
 
@@ -67,7 +67,7 @@ since `968144b` (`git diff --stat 968144b HEAD`).
 **What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall
 scores, golden-set pass rate, p50/p95 latency, and per-task cost all require a real
 LLM API call, and this project's own key is currently quota-limited (see
-[docs/EVALUATION.md](docs/EVALUATION.md)) — the badge and chart there read
+[docs/EVALUATION.md](docs/EVALUATION.md)). The badge and chart there read
 "pending live run" rather than a made-up number. Standing rule for this repo:
 if it isn't measured, it doesn't go in the README.
 
@@ -92,16 +92,16 @@ if it isn't measured, it doesn't go in the README.
 
 - **Multi-format ingestion**: PDF (page-tracked), Markdown, plain text
 - **Cited chat**: every answer references the specific document, page, and chunk it came from, with a relevance score
-- **Two-agent corrective RAG**: a Retrieval Strategist agent decides *how* to search (including real multi-hop decomposition into several sub-queries for comparison-style questions), a separate Drafting Agent writes the answer from whatever evidence it's given — they never see each other's prompts, only shared graph state. A critique node scores faithfulness *and* checks that the answer actually cites a source, and if either check fails, sends the Strategist back to re-plan (capped), instead of just returning a possibly-hallucinated or uncited answer
-- **Escalation instead of silent degradation**: if retries run out and the answer is still ungrounded or uncited, it's flagged with a visible "needs bid-director review" banner and `escalated: true` in the API response — a low-confidence answer never looks the same as a good one. A genuine refusal ("the corpus doesn't cover this") is correctly exempted from the citation check
-- **Durable checkpointing**: the graph's own state (not just chat history) is checkpointed to Postgres in production — a killed and restarted process resumes an in-flight run instead of losing it, verified with a real two-process, real-`SIGKILL` demo (`scripts/demo_kill_and_resume.py`), not just claimed. Falls back to in-memory for local SQLite dev
-- **Human-in-the-loop approval on commercially-sensitive answers**: opt in with `require_approval: true` and an answer quoting a specific £ figure genuinely pauses the graph via LangGraph's `interrupt()` — not a warning banner, an actual halt — until `POST /chat/{session_id}/approve` releases or rejects it. Off by default, so every existing caller (eval, golden set) is unaffected
-- **LLM calls have an explicit timeout and retry with backoff**: neither provider client had a timeout configured before — a hung connection could hang a `/chat` request indefinitely. Both `LLM_TIMEOUT_SECONDS` and `LLM_MAX_RETRIES` are wired through each SDK's own native retry transport (exponential backoff with jitter), not a hand-rolled loop, and verified via `tests/test_llm_client.py` that the config actually reaches the client, not just that it's declared in settings
-- **Every graph node is traced with OpenTelemetry**: a real span per node (`recall_memory`, `strategize`, `retrieve`, `draft`, `critique`, `escalate`, `approval_gate`, `remember`) nested under one parent span per request, with cost/latency/retry attributes attached — not just the final answer. Console output with zero setup in dev; set `OTEL_EXPORTER_OTLP_ENDPOINT` to export to any real backend (Jaeger, Grafana Tempo, Honeycomb, ...) in production. Verified with `tests/test_tracing.py` using OpenTelemetry's own in-memory exporter — real spans, real trace hierarchy, not asserted-by-inspection
-- **Every answer carries the exact commit that produced it**: `code_version` on every `/chat` response and `/health`, resolved from git (or `GIT_COMMIT_SHA` at deploy time) — since prompts and config live as code here, the commit *is* the prompt/config version, answering "which version produced this past answer" exactly
-- **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session — not just the current conversation's history. Deliberately a separate mechanism from graph checkpointing: one is short-term/thread-scoped, the other long-term/cross-session (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
+- **Two-agent corrective RAG**: a Retrieval Strategist agent decides *how* to search (including real multi-hop decomposition into several sub-queries for comparison-style questions), a separate Drafting Agent writes the answer from whatever evidence it's given, and they never see each other's prompts, only shared graph state. A critique node scores faithfulness *and* checks that the answer actually cites a source, and if either check fails, sends the Strategist back to re-plan (capped), instead of just returning a possibly-hallucinated or uncited answer
+- **Escalation instead of silent degradation**: if retries run out and the answer is still ungrounded or uncited, it's flagged with a visible "needs bid-director review" banner and `escalated: true` in the API response, so a low-confidence answer never looks the same as a good one. A genuine refusal ("the corpus doesn't cover this") is correctly exempted from the citation check
+- **Durable checkpointing**: the graph's own state (not just chat history) is checkpointed to Postgres in production, so a killed and restarted process resumes an in-flight run instead of losing it, verified with a real two-process, real-`SIGKILL` demo (`scripts/demo_kill_and_resume.py`), not just claimed. Falls back to in-memory for local SQLite dev
+- **Human-in-the-loop approval on commercially-sensitive answers**: opt in with `require_approval: true` and an answer quoting a specific £ figure genuinely pauses the graph via LangGraph's `interrupt()`. Not a warning banner, an actual halt. It stays paused until `POST /chat/{session_id}/approve` releases or rejects it. Off by default, so every existing caller (eval, golden set) is unaffected
+- **LLM calls have an explicit timeout and retry with backoff**: neither provider client had a timeout configured before, so a hung connection could hang a `/chat` request indefinitely. Both `LLM_TIMEOUT_SECONDS` and `LLM_MAX_RETRIES` are wired through each SDK's own native retry transport (exponential backoff with jitter), not a hand-rolled loop, and verified via `tests/test_llm_client.py` that the config actually reaches the client, not just that it's declared in settings
+- **Every graph node is traced with OpenTelemetry**: a real span per node (`recall_memory`, `strategize`, `retrieve`, `draft`, `critique`, `escalate`, `approval_gate`, `remember`) nested under one parent span per request, with cost/latency/retry attributes attached, not just the final answer. Console output with zero setup in dev; set `OTEL_EXPORTER_OTLP_ENDPOINT` to export to any real backend (Jaeger, Grafana Tempo, Honeycomb, ...) in production. Verified with `tests/test_tracing.py` using OpenTelemetry's own in-memory exporter: real spans, a real trace hierarchy, not asserted by inspection
+- **Every answer carries the exact commit that produced it**: `code_version` on every `/chat` response and `/health`, resolved from git (or `GIT_COMMIT_SHA` at deploy time). Since prompts and config live as code here, the commit *is* the prompt/config version, answering "which version produced this past answer" exactly
+- **Cross-session memory**: optional `user_id` lets the agent semantically recall relevant exchanges from a *different*, earlier session, not just the current conversation's history. Deliberately a separate mechanism from graph checkpointing: one is short-term/thread-scoped, the other long-term/cross-session (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **Conversation memory**: session-aware, persisted in Postgres (prod) or SQLite (dev)
-- **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io) — scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
+- **Rigorous evaluation**: faithfulness, answer relevancy, context precision, context recall, latency, and token-cost tracking, following the [RAGAS methodology](https://docs.ragas.io), scored against the same corrective-RAG graph `/chat` uses, not a separate simplified path
 - **Dual LLM provider support**: Google Gemini or Anthropic Claude, same abstraction used in [ai-resume-matcher](https://github.com/vishnu0529/ai-resume-matcher)
 - **Local-first dev, production-shaped deploy**: runs with zero external services locally (embedded Qdrant, SQLite); `docker-compose` wires a real Qdrant + Postgres for a production-shaped stack, same code either way
 - **Actually-working Docker + CI**: a real `Dockerfile`, `docker-compose.yml`, and GitHub Actions workflow (lint → test → docker build), not placeholders
@@ -143,14 +143,14 @@ figure and the caller opted in) → remember. Full component breakdown and desig
 | Layer | Choice |
 |---|---|
 | Backend | FastAPI, Pydantic |
-| Agent orchestration | LangGraph — two agent roles (Retrieval Strategist, Drafting Agent) plus a faithfulness-gated critique node that routes retries back to the Strategist |
+| Agent orchestration | LangGraph, with two agent roles (Retrieval Strategist, Drafting Agent) plus a faithfulness-gated critique node that routes retries back to the Strategist |
 | RAG primitives | LangChain (text splitting), custom retrieval/generation chain reused by the graph |
-| Vector store | Qdrant (embedded locally, real service via Docker) — separate collections for document chunks and cross-session user memory |
+| Vector store | Qdrant (embedded locally, real service via Docker), with separate collections for document chunks and cross-session user memory |
 | Embeddings | `BAAI/bge-small-en-v1.5` via `fastembed`/ONNX Runtime (local, free, no API cost, no torch) |
 | LLMs | Google Gemini / Anthropic Claude |
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) |
-| Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) in prod, in-memory `MemorySaver` in dev — same split as session storage above |
-| Tracing | OpenTelemetry — one span per graph node, console exporter in dev / OTLP to any real backend in prod (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
+| Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) in prod, in-memory `MemorySaver` in dev, the same split as session storage above |
+| Tracing | OpenTelemetry, one span per graph node, console exporter in dev / OTLP to any real backend in prod (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
 | Evaluation | RAGAS-methodology metrics, implemented directly, scored against the real two-agent graph (see [docs/EVALUATION.md](docs/EVALUATION.md)) |
 | Demo UI | Streamlit |
 | Testing | pytest, 78 tests, all mocked (no network/model load in CI) |
@@ -196,7 +196,7 @@ docker compose up --build
 | `GET` | `/documents` | List ingested documents |
 | `DELETE` | `/documents/{id}` | Remove a document and its vectors |
 | `POST` | `/chat` | Ask a question (optionally with `user_id` for cross-session memory, `require_approval` for the HITL gate); returns answer + citations + latency/token/cost metrics + faithfulness score + retry count + `escalated` flag + `code_version` + the Strategist's sub-queries/reasoning. If `require_approval` is set and the answer is commercially sensitive, `answer` is `null` and `pending_approval: true` |
-| `POST` | `/chat/{session_id}/approve` | Resumes a paused run with `{"approved": bool, "reason": str?}` — the human-in-the-loop decision on a `pending_approval` response. 409 if nothing is actually paused on that session |
+| `POST` | `/chat/{session_id}/approve` | Resumes a paused run with `{"approved": bool, "reason": str?}`, the human-in-the-loop decision on a `pending_approval` response. 409 if nothing is actually paused on that session |
 | `GET` | `/chat/{session_id}/history` | Retrieve a conversation's history |
 | `POST` | `/evaluate` | Score a single question/answer against retrieved context |
 
@@ -207,8 +207,8 @@ Interactive docs at `/docs` once the server is running.
 Four RAGAS-methodology metrics, run against a fixed 6-question eval set over
 `sample_docs/proposal_corpus/` via `python scripts/run_evaluation.py`. A
 larger 50-item golden set (`eval/golden_set.json`) goes further: 38
-answerable questions plus 12 deliberate traps — questions phrased like real
-RFP questions but asking for facts the corpus doesn't contain — where a
+answerable questions plus 12 deliberate traps. These are questions phrased like real
+RFP questions but asking for facts the corpus doesn't contain, where a
 correct refusal counts as a pass and a fabricated answer counts as a
 failure. See [docs/EVALUATION.md](docs/EVALUATION.md#golden-set-50-items-including-12-deliberate-traps)
 for how to run it.
@@ -231,15 +231,15 @@ ruff format --check .  # formatting
 
 ## Production Hardening
 
-The four things pilots typically skip — demonstrated in code and tests, not
+The four things pilots typically skip, demonstrated in code and tests, not
 just described here:
 
 | Scorecard item | What it is | Where |
 |---|---|---|
-| **Escalation on low confidence** | If the critique loop exhausts its retries and the answer is still ungrounded or uncited, a visible "needs bid-director review" banner is prepended and `escalated: true` is set on the response — a low-confidence answer is never indistinguishable from a good one. | `escalate_node` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_escalation_banner_added_*` |
-| **Citation enforcement** | The critique node checks every drafted answer for a `[Source N]` marker, not just faithfulness — an answer with no citation is treated as ungrounded and retried, same as a low faithfulness score. A genuine refusal is correctly exempted (it has nothing to cite). | `critique_node`/`_CITATION_MARKER` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_missing_citation_triggers_a_retry*`, `test_refusal_answers_are_not_flagged*` |
-| **Data-boundary config** | Document ingestion is scanned for patterns that look like real personal/financial data (UK sort codes, account numbers, National Insurance numbers) and rejected by default — this is the control that would have caught [the real incident already on record](docs/DEPLOYMENT.md) where a tuition-payment letter with bank details reached the public demo. Configurable via `DATA_BOUNDARY_MODE` (`block` / `warn` / `off`). | `app/services/data_boundary.py`; `tests/test_data_boundary.py` |
-| **One-command rollback** | `scripts/rollback.py [git-ref]` wipes the vector store and documents table, then re-ingests the corpus from the current working tree or a specific past commit — restoring a known-good state in a single command instead of hand-reconstructing what was ingested. | `scripts/rollback.py`, `vector_store.reset_collection()` |
+| **Escalation on low confidence** | If the critique loop exhausts its retries and the answer is still ungrounded or uncited, a visible "needs bid-director review" banner is prepended and `escalated: true` is set on the response, so a low-confidence answer is never indistinguishable from a good one. | `escalate_node` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_escalation_banner_added_*` |
+| **Citation enforcement** | The critique node checks every drafted answer for a `[Source N]` marker, not just faithfulness. An answer with no citation is treated as ungrounded and retried, same as a low faithfulness score. A genuine refusal is correctly exempted (it has nothing to cite). | `critique_node`/`_CITATION_MARKER` in `app/services/rag_graph.py`; `tests/test_rag_graph.py::test_missing_citation_triggers_a_retry*`, `test_refusal_answers_are_not_flagged*` |
+| **Data-boundary config** | Document ingestion is scanned for patterns that look like real personal/financial data (UK sort codes, account numbers, National Insurance numbers) and rejected by default. This is the control that would have caught [the real incident already on record](docs/DEPLOYMENT.md) where a tuition-payment letter with bank details reached the public demo. Configurable via `DATA_BOUNDARY_MODE` (`block` / `warn` / `off`). | `app/services/data_boundary.py`; `tests/test_data_boundary.py` |
+| **One-command rollback** | `scripts/rollback.py [git-ref]` wipes the vector store and documents table, then re-ingests the corpus from the current working tree or a specific past commit, restoring a known-good state in a single command instead of hand-reconstructing what was ingested. | `scripts/rollback.py`, `vector_store.reset_collection()` |
 
 ## Project Structure
 
