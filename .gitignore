@@ -10,3 +10,5 @@ uploaded_docs/
 .ruff_cache/
 *.egg-info/
 .DS_Store
+# Files delivered into this folder by the Claude desktop app
+Claude outputs/
