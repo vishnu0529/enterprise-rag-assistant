@@ -15,10 +15,10 @@ from app.services.rag_graph import (
 
 @pytest.fixture(autouse=True)
 def _unique_thread_per_test(request, monkeypatch):
-    """thread_id is session-scoped now (see rag_graph.py — durable
+    """thread_id is session-scoped now (see rag_graph.py, durable
     checkpointing only means anything if a resumed run continues the same
     conversation). Real callers always pass a fresh UUID session_id per
-    conversation (chat.py), so this collision can't happen in production —
+    conversation (chat.py), so this collision can't happen in production,
     but most of these tests predate that change and never pass session_id,
     so without this they'd all silently share one "no-session" thread and
     resume each other's checkpoints instead of starting fresh. Give every
@@ -202,7 +202,7 @@ def test_multi_hop_sub_queries_are_merged_and_deduped():
         result = answer_question_agentic("How does leave work and how does it change over time?")
 
     # 3 chunks retrieved across 2 sub-queries, but chunk_a and its duplicate share a
-    # (document_id, chunk_index) key — deduped down to 2, keeping the higher score.
+    # (document_id, chunk_index) key, deduped down to 2, keeping the higher score.
     assert len(result["contexts"]) == 2
     assert mocks["search"].call_count == 2
 
@@ -251,7 +251,7 @@ def test_missing_citation_triggers_a_retry_even_when_faithful():
         )
         result = answer_question_agentic("How many annual leave days?")
 
-    # Faithfulness alone would have passed on attempt 1 — it's the missing
+    # Faithfulness alone would have passed on attempt 1; it's the missing
     # [Source N] marker that forces the retry loop to run to its cap.
     assert result["retries"] == DEFAULT_MAX_RETRIES
     assert mocks["call_llm"].call_count == DEFAULT_MAX_RETRIES + 1
@@ -287,7 +287,7 @@ def test_no_escalation_when_faithful_and_cited_first_time():
 
 def test_refusal_answers_are_not_flagged_for_missing_citation():
     refusal_result = LLMResult(
-        text="The corpus doesn't cover this — it needs sign-off from the bid director.",
+        text="The corpus doesn't cover this, it needs sign-off from the bid director.",
         prompt_tokens=80,
         completion_tokens=20,
     )
@@ -304,7 +304,7 @@ def test_refusal_answers_are_not_flagged_for_missing_citation():
 def test_llm_failure_in_draft_returns_clean_message_without_retry_or_memory_write():
     """Regression test: draft_node's call_llm previously had no exception
     handling at all (unlike every other LLM call in the graph), so a real
-    quota/network error surfaced as a raw 500 all the way through the API —
+    quota/network error surfaced as a raw 500 all the way through the API,
     caught via manual testing against the live Render deployment, not by
     this suite, since it existed before this test did."""
     with ExitStack() as stack:
@@ -366,7 +366,7 @@ def test_approval_required_does_not_pause_without_a_price():
 
 def test_approval_gate_exempts_refusals_even_with_require_approval():
     refusal = LLMResult(
-        text="The corpus doesn't cover this — it needs sign-off from the bid director.",
+        text="The corpus doesn't cover this, it needs sign-off from the bid director.",
         prompt_tokens=80,
         completion_tokens=20,
     )
@@ -414,8 +414,8 @@ def test_resume_approval_rejected_replaces_the_answer_with_a_banner():
 
 
 def test_resume_approval_raises_when_nothing_is_actually_paused():
-    """A thread whose most recent turn already finished — whether or not
-    that turn ever paused — must reject a resume attempt. Without the
+    """A thread whose most recent turn already finished, whether or not
+    that turn ever paused, must reject a resume attempt. Without the
     interrupts check in resume_approval(), Command(resume=...) on a
     finished thread doesn't error: LangGraph just replays the checkpoint at
     END and hands back the old answer as if the resume "worked", which

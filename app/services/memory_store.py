@@ -1,17 +1,17 @@
 """Cross-session semantic memory, per user.
 
 The existing session_store.py only persists messages within a single
-session_id — a returning user starting a fresh session has no continuity
+session_id, so a returning user starting a fresh session has no continuity
 with what they asked before. This adds a second Qdrant collection
 (separate from the document-chunks collection in vector_store.py) that
 embeds and stores every question/answer exchange keyed by user_id, so a
 later session can semantically recall relevant prior exchanges even
-though it's a different session_id, or even a different process/deploy —
+though it's a different session_id, or even a different process/deploy,
 this is what makes the memory cross-session rather than just
 longer-context-within-one-conversation.
 
 user_id is caller-supplied (e.g. a login identity or a stable client-side
-ID) and optional throughout the API — omitting it just means no
+ID) and optional throughout the API; omitting it just means no
 cross-session recall, matching the existing anonymous-session behaviour.
 """
 

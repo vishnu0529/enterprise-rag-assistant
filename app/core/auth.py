@@ -1,13 +1,13 @@
 """Shared API-key gate for the write/expensive endpoints.
 
-The app has no user accounts — this is a single shared secret, not
+The app has no user accounts. This is a single shared secret, not
 per-user auth. Its purpose is narrow: stop random internet traffic from
 hitting a publicly-deployed instance's /documents (arbitrary uploads),
 /chat and /evaluate (real, metered LLM calls this project's own Gemini
 key pays for). /health is deliberately left ungated so platform health
 checks keep working without needing the secret.
 
-If API_KEY is unset (the local-dev default), the gate is a no-op — this
+If API_KEY is unset (the local-dev default), the gate is a no-op. This
 matches the project's existing "zero external services needed for local
 dev" design principle rather than forcing a secret on every contributor.
 """

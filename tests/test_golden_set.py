@@ -1,4 +1,4 @@
-"""Structural validation for eval/golden_set.json — runs with no API key and
+"""Structural validation for eval/golden_set.json. Runs with no API key and
 no model load, so it stays in the normal CI test suite. It checks the golden
 set itself is well-formed; scoring it against a live LLM is a separate,
 manual step (scripts/run_golden_set.py) because that needs a real API key.

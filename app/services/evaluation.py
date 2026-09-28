@@ -1,6 +1,6 @@
 """RAG evaluation metrics, implemented directly following the RAGAS
 methodology (https://docs.ragas.io) rather than depending on the `ragas`
-package — the installed `ragas==0.4.3` has a broken import against the
+package. The installed `ragas==0.4.3` has a broken import against the
 langchain-community version this project uses (an unrelated
 langchain_community.chat_models.vertexai dependency conflict). Implementing
 the metrics directly avoids that fragility and is functionally equivalent.
@@ -137,7 +137,7 @@ def evaluate_question(
     question: str, ground_truth: str | None = None, top_k: int | None = None
 ) -> EvalResult:
     # Evaluation reuses the exact same path /chat uses (the corrective-RAG
-    # graph), not a separate simplified path — so these metrics score real
+    # graph), not a separate simplified path, so these metrics score real
     # production behaviour, including any reformulate-and-retry the graph did.
     from app.services.rag_graph import answer_question_agentic
 
@@ -145,7 +145,7 @@ def evaluate_question(
     contexts = result["contexts"]
 
     # The graph's critique node already scored faithfulness on this exact
-    # (answer, contexts) pair — reuse it instead of paying for a second,
+    # (answer, contexts) pair, so reuse it instead of paying for a second,
     # redundant LLM-judge call.
     faithfulness = result.get("faithfulness_score")
     if faithfulness is None:

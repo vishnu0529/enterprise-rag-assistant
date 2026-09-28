@@ -1,15 +1,15 @@
 """Durable checkpointing for the corrective-RAG graph.
 
 Postgres-backed when a real Postgres DATABASE_URL is configured (docker-compose,
-production), falling back to an in-memory checkpointer for local SQLite dev —
+production), falling back to an in-memory checkpointer for local SQLite dev,
 the same local-first-dev/production-shaped-deploy split already used by
 app/core/db.py and app/services/vector_store.py.
 
 This is what makes a killed-and-restarted process resume a run instead of
 losing it: MemorySaver's state lives only in that process's memory and dies
 with it. PostgresSaver writes each node's checkpoint to Postgres as the graph
-runs, so a completely fresh process — a different Python interpreter, no
-shared memory — can reconnect with the same thread_id and continue from the
+runs, so a completely fresh process (a different Python interpreter, no
+shared memory) can reconnect with the same thread_id and continue from the
 last completed node. See scripts/demo_kill_and_resume.py for a live
 end-to-end demonstration (two real OS processes, one SIGKILLed mid-run).
 """

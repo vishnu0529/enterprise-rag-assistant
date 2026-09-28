@@ -61,7 +61,7 @@ jobs:
         id: check_key
         run: |
           if [ -z "$GOOGLE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::notice::No GOOGLE_API_KEY or ANTHROPIC_API_KEY secret configured — skipping the golden-set eval gate. See docs/EVALUATION.md#ci-merge-gate to enable it."
+            echo "::notice::No GOOGLE_API_KEY or ANTHROPIC_API_KEY secret configured, so the golden-set eval gate is skipped. See docs/EVALUATION.md#ci-merge-gate to enable it."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -81,7 +81,7 @@ jobs:
 
   publish-eval-metrics:
     # Reuses eval-gate's own run instead of re-running the golden set against
-    # a live LLM a second time — this job only spends tokens on the chart
+    # a live LLM a second time. This job only spends tokens on the chart
     # regeneration, which needs no model calls at all.
     runs-on: ubuntu-latest
     needs: eval-gate

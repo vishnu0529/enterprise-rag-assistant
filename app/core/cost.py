@@ -1,9 +1,9 @@
-"""Centralised token-cost estimate — same rates scripts/run_evaluation.py
+"""Centralised token-cost estimate, the same rates scripts/run_evaluation.py
 and scripts/run_golden_set.py already used inline (duplicated in two
 places before this). Now also attached as a trace attribute and returned
 on every /chat response, not just in batch eval runs.
 
-Illustrative only, NOT official pricing — update with current provider
+Illustrative only, NOT official pricing. Update with current provider
 rates before relying on this for real cost tracking or billing.
 """
 

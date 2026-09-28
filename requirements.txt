@@ -1,6 +1,6 @@
 # Pinned to versions verified working together in this project (see README
 # for why: newer sentence-transformers/torch combos have ABI/version
-# conflicts on some platforms — these exact pins are known-good).
+# conflicts on some platforms; these exact pins are known-good).
 
 fastapi==0.141.1
 uvicorn[standard]==0.52.0
@@ -18,7 +18,7 @@ langchain-text-splitters==1.1.2
 langgraph==1.2.11
 qdrant-client==1.18.0
 
-# Embeddings — fastembed (ONNX Runtime), not sentence-transformers+torch.
+# Embeddings: fastembed (ONNX Runtime), not sentence-transformers+torch.
 # torch's baseline memory footprint alone OOM'd this app on Render's free
 # tier (512MB); fastembed runs the same class of small models without it.
 fastembed>=0.4.0
@@ -32,13 +32,13 @@ pdfplumber==0.11.10
 sqlmodel==0.0.39
 psycopg2-binary==2.9.12
 
-# Durable LangGraph checkpointing (app/services/checkpointer.py) — psycopg3,
+# Durable LangGraph checkpointing (app/services/checkpointer.py): psycopg3,
 # separate from psycopg2-binary above (SQLModel/SQLAlchemy still uses v2).
 langgraph-checkpoint-postgres==3.1.2
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 
-# Tracing (app/core/tracing.py) — console exporter needs nothing extra;
+# Tracing (app/core/tracing.py): the console exporter needs nothing extra;
 # the OTLP exporter lets OTEL_EXPORTER_OTLP_ENDPOINT point at any real
 # collector (Jaeger, Grafana Tempo, Honeycomb, ...).
 opentelemetry-sdk==1.45.0
@@ -49,7 +49,7 @@ opentelemetry-exporter-otlp-proto-http==1.45.0
 # (langchain_community.chat_models.vertexai does not exist in the
 # langchain-community version above). RAGAS-methodology metrics
 # (faithfulness, answer relevancy, context precision/recall) are
-# implemented directly in app/services/evaluation.py instead — no
+# implemented directly in app/services/evaluation.py instead, with no
 # ragas/datasets dependency needed (numpy, pinned above, covers its
 # cosine-similarity math).
 

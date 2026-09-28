@@ -1,13 +1,13 @@
 """Renders the real compiled corrective-RAG graph to docs/graph.png.
 
 Generated directly from the actual StateGraph object via LangGraph's own
-get_graph().draw_mermaid_png() — not hand-drawn, so it can never silently
+get_graph().draw_mermaid_png(), not hand-drawn, so it can never silently
 drift out of sync with the real node/edge structure the way a manually
 maintained diagram can. Rerun this after any change to build_graph() in
 app/services/rag_graph.py.
 
 Requires network access (calls the public mermaid.ink rendering service via
-LangGraph's default draw method) — a manual regeneration step, not wired
+LangGraph's default draw method), a manual regeneration step, not wired
 into CI.
 
 Usage:

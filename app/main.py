@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     # loading torch + sentence-transformers at startup was observed to OOM
     # before the app could finish booting at all (see git history / commit
     # message on the revert of this line). Lazy loading on first use is a
-    # real tradeoff — it risks a slow/failed first request instead — but an
+    # real tradeoff, since it risks a slow/failed first request instead, but an
     # app that can't start is strictly worse than one that's slow once.
     # docs/DEPLOYMENT.md documents the underlying memory constraint and the
     # real fix (a lighter embedding backend or a bigger instance).

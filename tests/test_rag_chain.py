@@ -26,8 +26,8 @@ SAMPLE_CHUNKS = [
 def test_build_context_includes_source_labels_and_locations():
     context = build_context(SAMPLE_CHUNKS)
 
-    assert "[Source 1 — handbook.md" in context
-    assert "[Source 2 — handbook.md" in context
+    assert "[Source 1: handbook.md" in context
+    assert "[Source 2: handbook.md" in context
     assert "25 days of annual leave" in context
 
 

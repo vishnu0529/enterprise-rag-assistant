@@ -10,15 +10,15 @@ well-grounded or doesn't cite a source.
 
 `escalate` is the scorecard's "escalation on low confidence" item: if
 retries are exhausted and the answer is still ungrounded or still cites no
-source, it is not returned to the bid team looking like any other answer —
-a visible warning is prepended and `escalated=True` is set, so a caller can
+source, it is not returned to the bid team looking like any other answer.
+A visible warning is prepended and `escalated=True` is set, so a caller can
 route it for human review instead of silently shipping a low-confidence
 answer into a proposal.
 
 `approval_gate` is the human-in-the-loop item: when the caller opts in
 (`require_approval=True`) and the drafted answer quotes a specific
-commercial figure, the graph genuinely pauses via LangGraph's `interrupt()`
-— not a banner, an actual halt — until a human calls
+commercial figure, the graph genuinely pauses via LangGraph's `interrupt()`.
+Not a banner, an actual halt. It waits until a human calls
 `POST /chat/{session_id}/approve`. This is the "it does not touch a
 commercially sensitive question without a human approving first" boundary:
 past proposals, rate cards and fees are the most sensitive corpus in a
@@ -28,14 +28,14 @@ autonomous.
 
 This is a genuine two-role split, not a renamed single function: the
 Strategist (strategize_node) never sees the retrieved context or writes
-prose — it only decides sub_queries (supporting real multi-hop
+prose. It only decides sub_queries (supporting real multi-hop
 decomposition for comparison-style questions) and top_k. The Drafter
-(draft_node) never decides search strategy — it only writes from
+(draft_node) never decides search strategy. It only writes from
 whatever evidence retrieve_node assembled. They communicate solely
 through RagAgentState, not by calling each other directly.
 
 Reuses existing single-pass primitives (vector_store.search,
-rag_chain.build_context/SYSTEM_PROMPT) rather than duplicating them — see
+rag_chain.build_context/SYSTEM_PROMPT) rather than duplicating them. See
 docs/ARCHITECTURE.md for the full design rationale, including why
 cross-session memory (memory_store.py) is deliberately separate from
 LangGraph's own thread-scoped checkpointing.
@@ -65,7 +65,7 @@ DEFAULT_MAX_RETRIES = 2
 
 _CITATION_MARKER = re.compile(r"\[Source \d+\]")
 
-# Illustrative, not a compliance-grade classifier — same honesty pattern as
+# Illustrative, not a compliance-grade classifier, the same honesty pattern as
 # app/services/data_boundary.py. Matches a £ figure (day rate, fee, cover
 # amount): "£1,850", "£66,500", "£5 million". Good enough to gate the kind
 # of concrete commercial commitment a bid director should see before it
@@ -73,12 +73,12 @@ _CITATION_MARKER = re.compile(r"\[Source \d+\]")
 _COMMERCIAL_FIGURE = re.compile(r"£[\d,]+(?:\.\d+)?\s*(?:million|k)?\b", re.IGNORECASE)
 
 REJECTION_BANNER = (
-    "⚠️ **Not released — a reviewer rejected this answer before it reached you.**\n\n"
+    "⚠️ **Not released.** A reviewer rejected this answer before it reached you.**\n\n"
     "Reviewer note: {reason}\n\n"
 )
 
 ESCALATION_BANNER = (
-    "⚠️ **Needs bid-director review before use** — this answer was not "
+    "⚠️ **Needs bid-director review before use.** This answer was not "
     "well-grounded after {retries} attempt(s) ({reasons}). Do not put it in "
     "a proposal without human sign-off.\n\n"
 )
@@ -90,7 +90,7 @@ NO_DOCUMENTS_ANSWER = (
 
 STRATEGIST_SYSTEM_PROMPT = (
     "You are the Retrieval Strategist for a proposal-response assistant. You do not write "
-    "answers — a separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
+    "answers. A separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
     "Decide:\n"
     "1. One or more search queries to run. Use 2-3 only for genuine multi-hop questions "
     "(e.g. comparing two distinct things, which need separate searches); otherwise one "
@@ -115,7 +115,7 @@ _SCALAR_SPAN_ATTRS = (
 def _traced(name: str):
     """Wraps a node function in an OpenTelemetry span named after the node,
     recording the interesting fields it returned as span attributes. This is
-    scorecard item 4 (tracing) — every node's inputs/outputs are visible in
+    scorecard item 4 (tracing): every node's inputs/outputs are visible in
     whatever backend OTEL_EXPORTER_OTLP_ENDPOINT points at (or the console,
     in dev), not just the final answer."""
 
@@ -149,7 +149,7 @@ def _build_strategize_prompt(state: RagAgentState) -> str:
         parts.append(
             f"\nA previous attempt with different search queries produced an answer that "
             f"wasn't well-grounded: {state['critique_feedback']} "
-            "Change strategy — broaden, decompose, or rephrase, don't repeat the same queries."
+            "Change strategy: broaden, decompose, or rephrase, don't repeat the same queries."
         )
 
     if state.get("requested_top_k"):
@@ -239,7 +239,7 @@ def no_documents_node(state: RagAgentState) -> dict:
 @_traced("draft")
 def draft_node(state: RagAgentState) -> dict:
     """The Drafting Agent: writes the answer from whatever the Strategist's
-    plan retrieved. Deliberately has no say over search strategy — it
+    plan retrieved. Deliberately has no say over search strategy. It
     only sees the assembled evidence, not the sub_queries that produced it."""
     chunks = state["chunks"]
     context = build_context(chunks)
@@ -258,7 +258,7 @@ def draft_node(state: RagAgentState) -> dict:
     if remembered:
         memory_text = (
             "Relevant exchanges from this user's earlier sessions "
-            "(for continuity — don't repeat verbatim, build on it):\n"
+            "(for continuity: don't repeat verbatim, build on it):\n"
             + "\n".join(f"Q: {m['question']}\nA: {m['answer']}" for m in remembered)
             + "\n\n"
         )
@@ -276,7 +276,7 @@ def draft_node(state: RagAgentState) -> dict:
         llm_error = False
     except Exception as e:
         # Full traceback goes to logs (server-side only) so a real cause
-        # (bad key, quota, network) is diagnosable — the API response
+        # (bad key, quota, network) is diagnosable; the API response
         # deliberately only exposes the exception type, not its message,
         # in case the message itself contains anything sensitive.
         logger.exception("draft_node's call_llm failed")
@@ -289,7 +289,7 @@ def draft_node(state: RagAgentState) -> dict:
         cache_read_tokens = 0
         llm_error = True
 
-    # Plain dicts, not Citation objects — graph state gets msgpack-serialized
+    # Plain dicts, not Citation objects; graph state gets msgpack-serialized
     # to Postgres by the checkpointer, and an unregistered Pydantic type
     # there is a real (if currently just a warning) forward-compat hazard.
     # Pydantic validates a plain dict into a Citation automatically at the
@@ -324,14 +324,14 @@ def draft_node(state: RagAgentState) -> dict:
 @_traced("critique")
 def critique_node(state: RagAgentState) -> dict:
     if state.get("llm_error"):
-        # The Drafting Agent's call already failed — a faithfulness judge
+        # The Drafting Agent's call already failed; a faithfulness judge
         # call would hit the exact same broken connection. Skip it; _should_retry
         # checks llm_error directly and won't retry a failure retrying can't fix.
         return {"faithfulness_score": None, "critique_feedback": "", "missing_citation": False}
 
     contexts = [c["text"] for c in state["chunks"]]
     score = score_faithfulness(state["answer"], contexts)
-    # A refusal ("the corpus doesn't cover this") correctly cites nothing —
+    # A refusal ("the corpus doesn't cover this") correctly cites nothing,
     # citation enforcement only applies to answers that actually claim to
     # answer the question from the retrieved context.
     missing_citation = not is_refusal(state["answer"]) and not _CITATION_MARKER.search(
@@ -341,10 +341,10 @@ def critique_node(state: RagAgentState) -> dict:
     feedback_parts = []
     if score < MIN_FAITHFULNESS:
         feedback_parts.append(
-            f"scored {score:.2f}/1.0 on faithfulness — not well supported by the retrieved context"
+            f"scored {score:.2f}/1.0 on faithfulness, not well supported by the retrieved context"
         )
     if missing_citation:
-        feedback_parts.append("cited no source — every claim must reference a specific [Source N]")
+        feedback_parts.append("cited no source; every claim must reference a specific [Source N]")
 
     return {
         "faithfulness_score": score,
@@ -367,7 +367,7 @@ def _should_retry(state: RagAgentState) -> str:
 
 @_traced("escalate")
 def escalate_node(state: RagAgentState) -> dict:
-    """Scorecard item 7 — escalation on low confidence. Runs after retries
+    """Scorecard item 7, escalation on low confidence. Runs after retries
     are exhausted (or after an llm_error, or immediately after a first-pass
     success). Only actually escalates if the answer is still ungrounded or
     still uncited; a good first-pass answer or a genuine llm_error passes
@@ -395,18 +395,18 @@ def escalate_node(state: RagAgentState) -> dict:
 
 @_traced("approval_gate")
 def approval_gate_node(state: RagAgentState) -> dict:
-    """Human-in-the-loop gate (scorecard item 11's spirit — access control
+    """Human-in-the-loop gate (scorecard item 11's spirit: access control
     on the *action*, not just data). Only active when the caller opts in
     with require_approval=True; every existing caller (eval, golden set,
     the default /chat path) is unaffected. When active, an answer quoting a
     specific £ figure genuinely pauses the graph via interrupt() rather than
-    just carrying a warning — the graph does not proceed until a human
+    just carrying a warning. The graph does not proceed until a human
     calls resume_approval() with a real decision.
 
     Everything before the interrupt() call below must stay cheap and
     side-effect-free: LangGraph re-runs a node's logic from the top on
     every resume, so this function executes twice for one real approval
-    (once to raise the interrupt, once after resume) — that's fine for a
+    (once to raise the interrupt, once after resume), which is fine for a
     regex check, but would be wrong for anything with side effects."""
     if not state.get("require_approval") or state.get("llm_error"):
         return {"approval_status": "not_required"}
@@ -487,7 +487,7 @@ def get_graph():
 def _build_result(result: dict, latency_ms: float) -> dict:
     """Shared response shape for both a completed run and a resumed one.
     An interrupted run (result["__interrupt__"] present) has no "answer" yet
-    — the draft is sitting inside the interrupt payload, not released."""
+    The draft is sitting inside the interrupt payload, not released."""
     pending = result.get("__interrupt__")
     cost_usd = estimate_cost_usd(result.get("prompt_tokens", 0), result.get("completion_tokens", 0))
     if pending:
@@ -547,7 +547,7 @@ def answer_question_agentic(
     return shape, plus faithfulness_score/retries/sub_queries for callers
     that want to show the two-agent loop's behaviour (see routers/chat.py).
 
-    require_approval=False (the default — used by /evaluate, the golden
+    require_approval=False (the default, used by /evaluate, the golden
     set, and every existing caller) never pauses: approval_gate_node is a
     no-op. Only opt-in callers can hit pending_approval=True in the result,
     which must then be resolved via resume_approval() before this session's
@@ -571,7 +571,7 @@ def answer_question_agentic(
         "retry_count": 0,
         "max_retries": DEFAULT_MAX_RETRIES,
     }
-    # thread_id is per session (i.e. per engagement), not per question — a
+    # thread_id is per session (i.e. per engagement), not per question. A
     # durable checkpointer only means anything if a killed-and-restarted
     # process resumes the same in-flight conversation, not a fresh one per
     # question. Every node in this graph unconditionally overwrites its own
@@ -595,15 +595,15 @@ def answer_question_agentic(
 
 def resume_approval(session_id: str, approved: bool, reason: str | None = None) -> dict:
     """Resumes a run that paused at approval_gate_node. Must be called with
-    the same session_id the original answer_question_agentic() call used —
+    the same session_id the original answer_question_agentic() call used,
     that's the thread_id the paused checkpoint is keyed under.
 
-    Raises KeyError if the thread has nothing actually paused right now —
+    Raises KeyError if the thread has nothing actually paused right now,
     never existed, or its most recent turn already finished (with or
     without ever pausing). Without this check, Command(resume=...) on a
     finished thread doesn't error: LangGraph just replays the checkpoint at
     END and hands back the old answer, which would make this "succeed"
-    against an unrelated or already-resolved turn — see routers/chat.py's
+    against an unrelated or already-resolved turn. See routers/chat.py's
     409 for why that matters at the API boundary."""
     import time
 

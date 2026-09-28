@@ -3,7 +3,7 @@ against the real corrective-RAG graph and writes a results report to
 eval/golden_set_results.md.
 
 Answerable items are scored with the same RAGAS-methodology metrics as
-scripts/run_evaluation.py. Trap items have no ground truth — a trap "passes"
+scripts/run_evaluation.py. Trap items have no ground truth; a trap "passes"
 when the answer contains an explicit refusal (per the SYSTEM_PROMPT in
 app/services/rag_chain.py), and "fails" if the model fabricates a specific
 answer instead. This is the honesty check the plain accuracy metrics can't
@@ -14,7 +14,7 @@ genuinely doesn't answer.
 
 Also logs cost-per-run and p95 latency, appends a record to
 eval/metrics_history.jsonl, and writes eval/golden_set_metrics.json in
-shields.io's endpoint-badge format — CI updates both on every run to main,
+shields.io's endpoint-badge format. CI updates both on every run to main,
 which is what makes the README badge and trend chart move over time instead
 of being a one-off snapshot.
 
@@ -136,7 +136,7 @@ def main() -> None:
     )
     trap_note = (
         'A trap "pass" means the model refused rather than fabricating an '
-        "answer — this is the metric that actually matters for a bid team, "
+        "answer. This is the metric that actually matters for a bid team, "
         "since a hallucinated commercial term in a real proposal is far more "
         "costly than a missed factual lookup."
     )
@@ -154,8 +154,8 @@ def main() -> None:
     ]
     for r in results:
         status = "✅ PASS" if r["passed"] else "❌ FAIL"
-        faith = f"{r['faithfulness']:.2f}" if "faithfulness" in r else "—"
-        recall = f"{r['context_recall']:.2f}" if "context_recall" in r else "—"
+        faith = f"{r['faithfulness']:.2f}" if "faithfulness" in r else "n/a"
+        recall = f"{r['context_recall']:.2f}" if "context_recall" in r else "n/a"
         row = (
             f"| {r['id']} | {r['category']} | {status} | {faith} | "
             f"{recall} | {r['latency_ms']:.0f} |"

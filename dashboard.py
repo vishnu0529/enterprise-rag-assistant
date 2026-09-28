@@ -5,14 +5,14 @@ import streamlit as st
 
 API_BASE = "https://enterprise-rag-assistant-53ke.onrender.com"
 
-# Read from Streamlit Cloud's Secrets, which are server-side only — this
+# Read from Streamlit Cloud's Secrets, which are server-side only. This
 # request happens from Streamlit's Python backend to the FastAPI backend,
 # never from the visitor's browser, so the key is never exposed to whoever
 # is viewing the public dashboard, only whoever has the actual secret.
 try:
     _API_KEY = st.secrets.get("API_KEY", "")
 except Exception:
-    _API_KEY = ""  # no secrets.toml at all (e.g. local dev without one) — fine, gate is a no-op
+    _API_KEY = ""  # no secrets.toml at all (e.g. local dev without one), fine, gate is a no-op
 
 
 def _auth_headers() -> dict:
@@ -61,7 +61,7 @@ with st.sidebar:
     st.markdown("### Documents")
     try:
         # Render's free tier spins the backend down after inactivity and
-        # cold-starts in ~30-60s on the next request — a short timeout here
+        # cold-starts in ~30-60s on the next request, so a short timeout here
         # would misreport a cold start as "API unreachable".
         docs = requests.get(f"{api_base}/documents", headers=_auth_headers(), timeout=70).json()
     except requests.RequestException:
@@ -69,13 +69,13 @@ with st.sidebar:
 
     if docs is None:
         st.error(
-            f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting — try again in ~30s."
+            f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting, try again in ~30s."
         )
     elif not docs:
         st.caption("No documents ingested yet.")
     else:
         for d in docs:
-            st.markdown(f"**{d['filename']}** — {d['num_chunks']} chunks")
+            st.markdown(f"**{d['filename']}** ({d['num_chunks']} chunks)")
 
     uploaded = st.file_uploader("Upload a document", type=["pdf", "md", "txt"])
     if uploaded and st.button("Ingest document", use_container_width=True):
@@ -105,7 +105,7 @@ with st.sidebar:
     if st.button("New session", use_container_width=True):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
-        st.rerun()  # user_id is intentionally NOT reset — that's what makes memory cross-session
+        st.rerun()  # user_id is intentionally NOT reset; that's what makes memory cross-session
 
     st.divider()
     st.markdown("[GitHub](https://github.com/vishnu0529/enterprise-rag-assistant) · v0.1")
@@ -127,7 +127,7 @@ st.markdown(
 
 st.info(
     "The backend runs on Render's free tier, which sleeps after ~15 minutes of "
-    "inactivity. If your first request fails or times out, that's expected — "
+    "inactivity. If your first request fails or times out, that's expected. "
     "wait ~30-60s for it to wake up, then try again.",
     icon="⏳",
 )

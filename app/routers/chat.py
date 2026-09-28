@@ -45,7 +45,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
     history = get_history(session, session_id)
 
     # Cheap DB check before spending a Strategist LLM call on a corpus
-    # that's empty anyway — the graph would reach the same no_documents
+    # that's empty anyway. The graph would reach the same no_documents
     # short-circuit itself, just after retrieval instead of before it.
     if session.exec(select(Document)).first() is None:
         add_message(session, session_id, "user", request.question)
@@ -71,7 +71,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
     )
 
     add_message(session, session_id, "user", request.question)
-    # A paused run has no answer yet (result["answer"] is None) — nothing to
+    # A paused run has no answer yet (result["answer"] is None), so nothing to
     # record until POST .../approve resolves it one way or the other.
     if not result.get("pending_approval"):
         add_message(session, session_id, "assistant", result["answer"])
@@ -81,7 +81,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
 
 @router.post("/chat/{session_id}/approve", response_model=ChatResponse)
 def approve(session_id: str, request: ApprovalRequest, session: Session = Depends(get_session)):
-    """Resumes a run paused by approval_gate_node (see rag_graph.py) — the
+    """Resumes a run paused by approval_gate_node (see rag_graph.py). The
     human-in-the-loop boundary before a commercially-sensitive answer is
     released. session_id must be a session that's actually paused; there's
     no way to distinguish "never existed" from "already resolved" from

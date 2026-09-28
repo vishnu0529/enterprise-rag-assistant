@@ -1,18 +1,18 @@
-"""Data-boundary check for document ingestion — scorecard item 10.
+"""Data-boundary check for document ingestion, scorecard item 10.
 
 This exists because of a real incident (docs/DEPLOYMENT.md): a tuition
 payment letter containing bank details and a home address was uploaded to
 the public demo deployment and had to be manually deleted. The shared
 API-key gate stops anonymous traffic, but it does nothing to stop someone
-who *has* the key from uploading a real, sensitive document — this is the
+who *has* the key from uploading a real, sensitive document. This is the
 control that would have actually caught that specific incident.
 
 These are illustrative pattern-matching heuristics, not a compliance-grade
-PII scanner — they catch the shape of the problem this project already hit
+PII scanner. They catch the shape of the problem this project already hit
 once (UK bank details, UK National Insurance numbers), not every possible
 category of sensitive data. The only real fix for a public deployment is
-still "only ever ingest synthetic/sample documents" (see docs/DEPLOYMENT.md)
-— this is a safety net behind that rule, not a replacement for it.
+still "only ever ingest synthetic/sample documents" (see docs/DEPLOYMENT.md).
+This is a safety net behind that rule, not a replacement for it.
 """
 
 import logging

@@ -1,13 +1,13 @@
-"""OpenTelemetry tracing for the corrective-RAG graph — scorecard item 4.
+"""OpenTelemetry tracing for the corrective-RAG graph, scorecard item 4.
 
 Local-first dev, production-shaped deploy, same split as everywhere else in
 this repo (Qdrant, Postgres, checkpointer): no OTEL_EXPORTER_OTLP_ENDPOINT
-configured means spans print to the console — zero external services,
+configured means spans print to the console, with zero external services,
 still real tracing, not a stub. Set the endpoint to any OTel-compatible
 collector (Jaeger, Grafana Tempo, Honeycomb, ...) to export there instead;
 same instrumentation code either way.
 
-get_tracer() is the only thing callers need — it lazily sets up the global
+get_tracer() is the only thing callers need. It lazily sets up the global
 TracerProvider on first call. Tests add their own extra span processor
 (see tests/test_tracing.py) to inspect spans in-memory without needing a
 real backend or touching this module's setup logic.

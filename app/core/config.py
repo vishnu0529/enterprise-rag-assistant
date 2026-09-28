@@ -8,11 +8,11 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
-    # LLM call resilience — see app/services/llm_client.py. Neither provider
+    # LLM call resilience. See app/services/llm_client.py. Neither provider
     # client had an explicit timeout before this, so a hung connection could
     # hang a /chat request indefinitely. Retries use each SDK's own native
     # exponential backoff (HttpRetryOptions / httpx-based), not a hand-rolled
-    # loop — LLM_MAX_RETRIES is retry *attempts*, so 2 means up to 3 calls total.
+    # loop. LLM_MAX_RETRIES is retry *attempts*, so 2 means up to 3 calls total.
     LLM_TIMEOUT_SECONDS: int = 30
     LLM_MAX_RETRIES: int = 2
 
@@ -37,18 +37,18 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # API access
-    # Shared-secret gate for /documents, /chat, /evaluate — see app/core/auth.py.
+    # Shared-secret gate for /documents, /chat, /evaluate. See app/core/auth.py.
     # Empty (the local-dev default) disables the gate entirely.
     API_KEY: str = ""
 
-    # Tracing — see app/core/tracing.py. Empty (dev default): spans print to
+    # Tracing. See app/core/tracing.py. Empty (dev default): spans print to
     # the console, zero external services. Set to any OTel-compatible
     # collector endpoint (Jaeger, Grafana Tempo, Honeycomb, ...) to export
-    # real traces instead — same local-first-dev/production-shaped-deploy
+    # real traces instead, the same local-first-dev/production-shaped-deploy
     # split as Qdrant/Postgres above.
     OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
 
-    # Data boundary — see app/services/data_boundary.py. "block" rejects
+    # Data boundary. See app/services/data_boundary.py. "block" rejects
     # ingestion of anything matching a sensitive-data pattern (the exact gap
     # that let a real tuition-payment letter with bank details reach the
     # public demo, see docs/DEPLOYMENT.md); "warn" logs but allows it; "off"

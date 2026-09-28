@@ -40,14 +40,14 @@ async def ingest_document(file: UploadFile = File(...), session: Session = Depen
     try:
         enforce_data_boundary("\n".join(p["text"] for p in pages))
     except DataBoundaryViolation as e:
-        # Reject before the sensitive content ever reaches the vector store —
+        # Reject before the sensitive content ever reaches the vector store,
         # and don't leave the raw upload sitting on disk either.
         dest.unlink(missing_ok=True)
         raise HTTPException(
             422,
             f"Rejected: this document looks like it contains real personal/financial "
             f"data ({', '.join(e.findings)}). Only synthetic/sample documents should be "
-            f"ingested here — see docs/DEPLOYMENT.md.",
+            f"ingested here. See docs/DEPLOYMENT.md.",
         ) from e
 
     chunks = chunk_document(document_id, file.filename, pages)
@@ -76,7 +76,7 @@ def remove_document(document_id: str, session: Session = Depends(get_session)):
     delete_document(document_id)
 
     # ingest_document saves the raw upload to UPLOAD_DIR/{document_id}{suffix}
-    # but this wasn't being cleaned up here — the vector-store chunks and DB
+    # but this wasn't being cleaned up here. The vector-store chunks and DB
     # row were removed, but the original file (with any sensitive content it
     # contained) stayed on disk indefinitely.
     suffix = Path(doc.filename).suffix.lower()

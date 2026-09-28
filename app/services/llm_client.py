@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # is pinned here, so this uses a conservative chars-per-token heuristic
 # (~4 chars/token for English text) as a proxy. Same pattern already proven
 # in ai-business-automation-hub's provider.py (build_system_message). Erring
-# toward "cache it" costs nothing on a miss — cache_control on a short prompt
-# is a no-op, not an error — so the heuristic is deliberately rounded down.
+# toward "cache it" costs nothing on a miss, since cache_control on a short prompt
+# is a no-op, not an error, so the heuristic is deliberately rounded down.
 _ANTHROPIC_CACHE_THRESHOLD_CHARS = 4096
 
 
@@ -24,7 +24,7 @@ class LLMResult:
     prompt_tokens: int
     completion_tokens: int
     # 0 on every non-Anthropic provider and on any Anthropic call whose system
-    # prompt didn't cross the caching threshold above — these only become
+    # prompt didn't cross the caching threshold above; these only become
     # nonzero once a cache write or read actually happens.
     cache_creation_tokens: int = 0
     cache_read_tokens: int = 0
@@ -34,7 +34,7 @@ def _google_client():
     from google import genai
     from google.genai import types
 
-    # Neither timeout nor retry existed before — a hung connection could
+    # Neither timeout nor retry existed before, so a hung connection could
     # hang a /chat request indefinitely. Uses the SDK's own retry transport
     # (exponential backoff, jittered) rather than a hand-rolled loop.
     http_options = types.HttpOptions(
@@ -53,7 +53,7 @@ def _google_client():
 def _anthropic_client():
     import anthropic
 
-    # timeout + max_retries are native httpx-transport options on this SDK —
+    # timeout + max_retries are native httpx-transport options on this SDK,
     # same exponential-backoff-with-jitter behaviour as the Google branch,
     # just configured through the vendor's own mechanism instead of ours.
     return anthropic.Anthropic(

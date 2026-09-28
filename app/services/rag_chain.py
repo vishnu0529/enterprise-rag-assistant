@@ -6,11 +6,11 @@ from app.services.vector_store import search
 
 SYSTEM_PROMPT = (
     "You are a proposal-response assistant for a professional-services firm's "
-    "bid team. Answer the user's question using ONLY the provided context — the "
+    "bid team. Answer the user's question using ONLY the provided context: the "
     "firm's own capability statement, past proposals, team credentials, rate "
     "card, and standard terms. If the answer is not contained in the context, "
     "say plainly that the corpus doesn't cover it and that it needs sign-off "
-    "from the bid director before going in a response — never fabricate a "
+    "from the bid director before going in a response. Never fabricate a "
     "claim, a number, or a commercial term that isn't grounded in a source. "
     "Be concise, and refer to sources by their number, e.g. [Source 1], "
     "when relevant."
@@ -20,7 +20,7 @@ SYSTEM_PROMPT = (
 # answer. Shared by the critique/escalation logic in rag_graph.py (a refusal
 # should never be treated as a missing-citation failure) and by
 # scripts/run_golden_set.py (a refusal is exactly what a trap item should
-# produce) — one definition, so the two can't quietly drift apart.
+# produce). One definition, so the two can't quietly drift apart.
 REFUSAL_MARKERS = (
     "doesn't cover",
     "does not cover",
@@ -43,7 +43,7 @@ def build_context(chunks: list[dict]) -> str:
     parts = []
     for i, c in enumerate(chunks, start=1):
         loc = f"p.{c['page']}" if c.get("page") else f"chunk {c['chunk_index']}"
-        parts.append(f"[Source {i} — {c['filename']} ({loc})]\n{c['text']}")
+        parts.append(f"[Source {i}: {c['filename']} ({loc})]\n{c['text']}")
     return "\n\n".join(parts)
 
 

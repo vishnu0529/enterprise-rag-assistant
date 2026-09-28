@@ -1,11 +1,11 @@
 """Local embeddings via fastembed (ONNX runtime), not sentence-transformers.
 
 sentence-transformers pulls in torch, whose baseline memory footprint alone
-was enough to OOM this app on Render's free tier (512MB) — see the git
+was enough to OOM this app on Render's free tier (512MB). See the git
 history around the commit that reverted eager-loading it at startup.
 fastembed runs the same class of small embedding models via ONNX Runtime
 instead, with a much smaller resident footprint, while keeping embeddings
-local and free (no per-call API cost) — same tradeoff the project already
+local and free (no per-call API cost), the same tradeoff the project already
 chose, just without the torch tax.
 """
 

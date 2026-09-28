@@ -1,9 +1,9 @@
-"""One-command rollback — scorecard item 13.
+"""One-command rollback, scorecard item 13.
 
 Wipes the vector store and the documents table, then re-ingests
 sample_docs/proposal_corpus/ from either the current working tree or a
 specific git ref, restoring a known-good state in a single command. This is
-the answer to "the last deploy's corpus/config regressed something — put it
+the answer to "the last deploy's corpus/config regressed something, put it
 back" without hand-reconstructing what was ingested.
 
 Usage:
@@ -86,7 +86,7 @@ def main() -> None:
             chunks = chunk_document(document_id, doc_path.name, pages)
             upsert_chunks(chunks)
             # /chat short-circuits to "no documents" based on this table, not
-            # the vector store directly — skipping this row would silently
+            # the vector store directly; skipping this row would silently
             # break chat even though the corpus was correctly re-ingested.
             session.add(Document(id=document_id, filename=doc_path.name, num_chunks=len(chunks)))
             total_chunks += len(chunks)

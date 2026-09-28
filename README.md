@@ -61,7 +61,7 @@ commercial figure without a human saying so:
 | Graph diagram | Hand-drawn Mermaid, could drift from the real code | `docs/graph.png`, rendered directly from the compiled `StateGraph` object |
 | Tests | 50 passing | 78 passing (+28) |
 
-Scale across both passes: 13 commits, 48 files touched, +2,943/-163 lines
+Scale across both passes: 15 commits, 53 files touched, +3,014/-235 lines
 since `968144b` (`git diff --stat 968144b HEAD`).
 
 **What's not in this table yet, on purpose:** live faithfulness/relevancy/context-recall

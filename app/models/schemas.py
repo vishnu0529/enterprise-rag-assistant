@@ -68,16 +68,16 @@ class ApprovalRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     session_id: str
-    answer: str | None  # None only while pending_approval is True — nothing has been released yet
+    answer: str | None  # None only while pending_approval is True; nothing has been released yet
     citations: list[Citation]
     latency_ms: float
     prompt_tokens: int
     completion_tokens: int
-    cache_creation_tokens: int = 0  # Anthropic prompt-cache write tokens — see llm_client.py
+    cache_creation_tokens: int = 0  # Anthropic prompt-cache write tokens, see llm_client.py
     cache_read_tokens: int = 0  # Anthropic prompt-cache read tokens (0 unless caching engaged)
     faithfulness_score: float | None = None  # None only for the no-documents short-circuit
     retries: int = 0  # how many times the critique sent the Strategist back to re-plan
-    escalated: bool = False  # retries exhausted and still ungrounded/uncited — needs human review
+    escalated: bool = False  # retries exhausted and still ungrounded/uncited, needs human review
     used_memory: bool = False  # whether a past session's exchange was recalled into context
     sub_queries: list[str] = []  # the Retrieval Strategist's actual search plan for this answer
     strategist_reasoning: str = ""  # the Strategist's one-sentence rationale for that plan
@@ -85,5 +85,5 @@ class ChatResponse(BaseModel):
     approval_status: str = "not_required"  # not_required | approved | rejected
     approval_reason: str = ""  # why approval was needed, only set when pending_approval is True
     draft_answer: str | None = None  # the un-released draft, only set when pending_approval is True
-    code_version: str = ""  # git commit that produced this answer — see app/core/version.py
-    cost_usd: float = 0.0  # illustrative token-cost estimate — see app/core/cost.py
+    code_version: str = ""  # git commit that produced this answer, see app/core/version.py
+    cost_usd: float = 0.0  # illustrative token-cost estimate, see app/core/cost.py

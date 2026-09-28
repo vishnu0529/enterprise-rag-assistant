@@ -12,7 +12,7 @@ from tests.test_rag_graph import apply_patches
 def _capture_spans():
     """Adds an extra span processor to whatever tracer provider is already
     active (get_tracer() lazily creates one on first use, real code or
-    tests) — doesn't touch global setup, just observes. OTel supports
+    tests), doesn't touch global setup, just observes. OTel supports
     multiple processors on one provider by design; this is the documented
     pattern for inspecting spans in tests without a real backend."""
     get_tracer()
@@ -75,7 +75,7 @@ def test_no_documents_short_circuit_still_produces_a_trace():
 
     names = {s.name for s in exporter.get_finished_spans()}
     assert "no_documents" in names
-    assert "draft" not in names  # never reached — proves the trace reflects the real path taken
+    assert "draft" not in names  # never reached, proves the trace reflects the real path taken
 
 
 def test_parent_span_records_cost_and_latency():

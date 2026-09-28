@@ -18,7 +18,8 @@ from app.services.evaluation import evaluate_question
 from app.services.ingestion import chunk_document, load_text
 from app.services.vector_store import upsert_chunks
 
-# noqa: E501 — these are natural-language eval data, not code; wrapping them
+# noqa: E501
+# The strings below are natural-language eval data, not code; wrapping them
 # would hurt readability more than the line-length lint helps.
 # Deliberately spans five of the seven corpus documents, so this fixed set
 # also exercises multi-document retrieval, not just single-file recall.
