@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +18,35 @@ logger = logging.getLogger(__name__)
 # toward "cache it" costs nothing on a miss, since cache_control on a short prompt
 # is a no-op, not an error, so the heuristic is deliberately rounded down.
 _ANTHROPIC_CACHE_THRESHOLD_CHARS = 4096
+
+# Process-wide pacing between outbound LLM calls. The SDK retry transports
+# configured below back off over roughly seven seconds across their attempts,
+# which absorbs a transient 503 but not a provider's requests-per-minute cap:
+# that needs a wait measured in tens of seconds, so a batch run exhausts its
+# retries and fails partway through. Spacing the calls out instead keeps the
+# rate under the cap in the first place. Off by default
+# (LLM_MIN_INTERVAL_SECONDS = 0), so nothing changes for interactive /chat use.
+_pace_lock = threading.Lock()
+_last_call_started_at = 0.0
+
+
+def _wait_for_turn() -> float:
+    """Block until the minimum interval since the previous call has elapsed.
+
+    Returns the number of seconds actually slept, for logging and tests.
+    """
+    interval = settings.LLM_MIN_INTERVAL_SECONDS
+    if interval <= 0:
+        return 0.0
+    global _last_call_started_at
+    with _pace_lock:
+        wait = interval - (time.monotonic() - _last_call_started_at)
+        if wait > 0:
+            time.sleep(wait)
+        else:
+            wait = 0.0
+        _last_call_started_at = time.monotonic()
+    return wait
 
 
 @dataclass
@@ -65,6 +96,9 @@ def _anthropic_client():
 
 def call_llm(system: str, user: str, max_tokens: int = 2048) -> LLMResult:
     provider = settings.LLM_PROVIDER.lower()
+    slept = _wait_for_turn()
+    if slept:
+        logger.debug("paced LLM call: waited %.2fs to stay under the rate cap", slept)
     if provider == "google":
         client = _google_client()
         prompt = f"{system}\n\n{user}"

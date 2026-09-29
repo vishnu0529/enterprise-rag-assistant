@@ -1,6 +1,9 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.core.config import settings
+from app.services import llm_client
 from app.services.llm_client import _anthropic_client, _google_client, call_llm
 
 
@@ -105,3 +108,59 @@ def test_anthropic_cache_usage_defaults_to_zero_when_absent():
 
     assert result.cache_creation_tokens == 0
     assert result.cache_read_tokens == 0
+
+
+def test_calls_are_not_paced_when_the_interval_is_zero():
+    """The default must not slow interactive /chat down at all."""
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch.object(settings, "LLM_MIN_INTERVAL_SECONDS", 0.0),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+        patch("app.services.llm_client.time.sleep") as mock_sleep,
+    ):
+        call_llm("short system prompt", "question")
+        call_llm("short system prompt", "question")
+
+    mock_sleep.assert_not_called()
+
+
+def test_a_second_call_waits_out_the_configured_interval():
+    """The free Gemini tier caps requests per minute, which the SDK's own
+    backoff cannot ride out. Spacing the calls keeps the rate under the cap."""
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+
+    llm_client._last_call_started_at = 0.0
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch.object(settings, "LLM_MIN_INTERVAL_SECONDS", 5.0),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+        patch("app.services.llm_client.time.sleep") as mock_sleep,
+        patch("app.services.llm_client.time.monotonic", side_effect=[100.0, 100.0, 101.5, 101.5]),
+    ):
+        call_llm("short system prompt", "question")  # sets the clock to 100.0
+        call_llm("short system prompt", "question")  # 1.5s later, owes 3.5s
+
+    mock_sleep.assert_called_once()
+    assert mock_sleep.call_args[0][0] == pytest.approx(3.5)
+
+
+def test_no_wait_when_more_than_the_interval_has_already_passed():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _mock_anthropic_response()
+
+    llm_client._last_call_started_at = 0.0
+    with (
+        patch.object(settings, "LLM_PROVIDER", "anthropic"),
+        patch.object(settings, "LLM_MIN_INTERVAL_SECONDS", 5.0),
+        patch("app.services.llm_client._anthropic_client", return_value=mock_client),
+        patch("app.services.llm_client.time.sleep") as mock_sleep,
+        patch("app.services.llm_client.time.monotonic", side_effect=[200.0, 200.0, 260.0, 260.0]),
+    ):
+        call_llm("short system prompt", "question")
+        call_llm("short system prompt", "question")
+
+    mock_sleep.assert_not_called()

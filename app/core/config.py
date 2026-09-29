@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: int = 30
     LLM_MAX_RETRIES: int = 2
 
+    # Minimum seconds between outbound LLM calls, process-wide. 0 disables it,
+    # which is the default and the behaviour everything had before. Set it when
+    # the provider enforces a requests-per-minute cap that the SDK's own
+    # exponential backoff cannot ride out: the free Gemini tier allows 10 rpm on
+    # gemini-2.5-flash and 15 rpm on gemini-2.5-flash-lite, while the backoff
+    # here tops out around 7 seconds over its retry attempts. A batch run such as
+    # scripts/run_golden_set.py issues several calls per item and would exhaust
+    # its retries inside the first minute without this.
+    LLM_MIN_INTERVAL_SECONDS: float = 0.0
+
     # Embeddings
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 
