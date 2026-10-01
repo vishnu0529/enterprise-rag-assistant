@@ -93,6 +93,7 @@ NO_DOCUMENTS_ANSWER = (
     "Upload a document first via POST /documents."
 )
 
+
 def _strategist_system_prompt() -> str:
     # The ceiling tracks settings.TOP_K rather than a fixed literal, so
     # raising that one config value actually widens what the Strategist is
@@ -107,6 +108,7 @@ def _strategist_system_prompt() -> str:
         f"2. How many chunks to retrieve per query (top_k, between 3 and {settings.TOP_K}).\n\n"
         'Respond as JSON: {"sub_queries": ["..."], "top_k": <int>, "reasoning": "<one sentence>"}'
     )
+
 
 _SCALAR_SPAN_ATTRS = (
     "top_k",
