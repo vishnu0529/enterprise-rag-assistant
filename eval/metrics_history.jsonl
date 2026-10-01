@@ -1,0 +1,1 @@
+{"timestamp": "2026-10-01T08:59:30.001966+00:00", "commit": "d66f577", "n_items": 50, "n_pass": 44, "n_traps": 12, "n_trap_pass": 12, "pass_rate_pct": 88, "p50_latency_ms": 10236.4, "p95_latency_ms": 33219.1, "mean_latency_ms": 15193.4, "total_cost_usd": 0.00532, "cost_per_task_usd": 0.000106}
