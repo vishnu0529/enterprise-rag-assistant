@@ -64,7 +64,11 @@ logger = logging.getLogger(__name__)
 MIN_FAITHFULNESS = 0.7
 DEFAULT_MAX_RETRIES = 2
 
-_CITATION_MARKER = re.compile(r"\[Source \d+\]")
+# Matches "[Source 1]" but also the multi-source form the Drafting Agent
+# sometimes writes for a claim backed by more than one chunk, e.g.
+# "[Source 5, Source 6]" or "[Source 5, 6]" - a real citation, just not the
+# single-number-only shape a stricter \[Source \d+\] would require.
+_CITATION_MARKER = re.compile(r"\[Sources? \d+[^\]]*\]")
 
 # Illustrative, not a compliance-grade classifier, the same honesty pattern as
 # app/services/data_boundary.py. Matches a £ figure (day rate, fee, cover

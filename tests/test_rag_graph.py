@@ -285,6 +285,23 @@ def test_no_escalation_when_faithful_and_cited_first_time():
     assert "bid-director review" not in result["answer"]
 
 
+def test_multi_source_citation_is_not_flagged_as_missing():
+    """[Source 5, Source 6] is a real citation covering a claim backed by
+    two chunks, not an uncited claim - the stricter \\[Source \\d+\\] alone
+    regex used to miss this and escalate a correctly-cited answer."""
+    multi_source_result = LLMResult(
+        text="You get 25 days of annual leave. [Source 1, Source 2]",
+        prompt_tokens=100,
+        completion_tokens=15,
+    )
+    with ExitStack() as stack:
+        apply_patches(stack, call_llm=lambda *a, **k: multi_source_result)
+        result = answer_question_agentic("How many annual leave days?")
+
+    assert result["escalated"] is False
+    assert "no source citation" not in result["answer"]
+
+
 def test_refusal_answers_are_not_flagged_for_missing_citation():
     refusal_result = LLMResult(
         text="The corpus doesn't cover this, it needs sign-off from the bid director.",
