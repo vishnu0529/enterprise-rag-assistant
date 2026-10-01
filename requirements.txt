@@ -18,6 +18,11 @@ langchain-text-splitters==1.1.2
 langgraph==1.2.11
 qdrant-client==1.18.0
 
+# Keyword half of hybrid retrieval (app/services/vector_store.py): dense
+# embeddings underrank short numeric/clause facts, BM25 catches those by
+# exact term overlap. Pure Python, no native deps.
+rank_bm25==0.2.2
+
 # Embeddings: fastembed (ONNX Runtime), not sentence-transformers+torch.
 # torch's baseline memory footprint alone OOM'd this app on Render's free
 # tier (512MB); fastembed runs the same class of small models without it.

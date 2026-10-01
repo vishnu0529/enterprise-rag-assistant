@@ -97,33 +97,39 @@ It also appends a record to `eval/metrics_history.jsonl` and rewrites
 `eval/golden_set_metrics.json` (a shields.io endpoint-badge payload). The
 script exits non-zero if any trap is answered instead of refused.
 
-### Known gap: gs022 (expense-cap question)
+### Hybrid retrieval (dense + keyword)
 
-Current live result: **48/50, 12/12 traps correctly refused** (see
-`eval/golden_set_results.md`). The one remaining answerable failure,
-`gs022` ("What is the expense cap under Aldermere's standard commercial
-terms?", ground truth: capped at 12% of professional fees), is a genuine
-retrieval-ranking gap, not a bug:
+Current live result: **50/50, 12/12 traps correctly refused** (see
+`eval/golden_set_results.md`). Getting here surfaced two real bugs and one
+retrieval-ranking gap while debugging gs006/gs020/gs022/gs024:
 
-- The chunk holding the answer ranks **#13 of 33** by cosine similarity
-  against the query embedding. `TOP_K` (currently 10) doesn't reach it.
-- Two real bugs were found and fixed while investigating this and three
-  sibling failures (gs006/gs020/gs024): `run_golden_set.py` wasn't clearing
-  the vector store between runs (tripling every chunk across retries), and
-  `settings.TOP_K` wasn't wired into the agentic graph's Strategist node at
-  all (it picked its own top_k from a hardcoded prompt range, ignoring
-  config). Both are fixed. gs006/gs020/gs024 now pass; gs022 doesn't,
-  because its chunk's rank (#13) is further out than raising `TOP_K`
-  alone can reasonably reach without retrieving close to half this
-  33-chunk corpus on every query.
-- The actual fix is **hybrid retrieval** (dense embeddings + keyword/BM25,
-  merged) rather than a bigger `TOP_K`: short, numeric, clause-style facts
-  like "12% of professional fees" are exactly what dense bi-encoder
-  embeddings (`BAAI/bge-small-en-v1.5` here) underrank relative to
-  topically-similar prose, and exact keyword matching catches them
-  precisely where embeddings don't. Not implemented yet — tracked here as
-  a known limitation rather than silently left unexplained in a results
-  table.
+- `run_golden_set.py` wasn't clearing the vector store between runs, so
+  retries (e.g. chasing a provider rate limit) tripled every chunk,
+  crowding correct results out with duplicates. Fixed: `_ingest_corpus()`
+  now calls `reset_collection()` first.
+- `settings.TOP_K` wasn't wired into the agentic graph at all — the
+  Strategist node picked its own top_k from a hardcoded prompt range,
+  ignoring config entirely. Fixed in `app/services/rag_graph.py`.
+- `gs022` ("What is the expense cap under Aldermere's standard commercial
+  terms?", ground truth: capped at 12% of professional fees) still failed
+  after both fixes: its chunk ranked **#13 of 33** by dense cosine
+  similarity, further out than raising `TOP_K` alone could reasonably
+  reach without retrieving close to half the corpus on every query. Short,
+  numeric, clause-style facts like "12% of professional fees" are exactly
+  what dense bi-encoder embeddings (`BAAI/bge-small-en-v1.5` here) underrank
+  relative to topically-similar prose, since the query shares more surface
+  vocabulary with a document's title/heading than with the terse clause
+  itself.
+
+  Fixed with **hybrid retrieval**: `app/services/vector_store.py` now runs
+  a BM25 keyword search (`rank_bm25`) alongside the existing dense search
+  and merges both rankings via reciprocal rank fusion (RRF), so an exact
+  keyword match can surface a chunk dense similarity alone ranked too low
+  to reach. Moved gs022's chunk from rank #13 to #7, inside `TOP_K=10`.
+  Covered by `tests/test_vector_store.py` (RRF fusion, BM25 cache
+  invalidation, and a reproduction of this exact failure mode: a chunk
+  present in the keyword results but absent from the dense pool must still
+  surface in the final merged results).
 
 ## CI merge gate
 
