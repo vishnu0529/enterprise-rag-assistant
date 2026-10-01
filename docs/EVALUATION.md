@@ -97,6 +97,34 @@ It also appends a record to `eval/metrics_history.jsonl` and rewrites
 `eval/golden_set_metrics.json` (a shields.io endpoint-badge payload). The
 script exits non-zero if any trap is answered instead of refused.
 
+### Known gap: gs022 (expense-cap question)
+
+Current live result: **48/50, 12/12 traps correctly refused** (see
+`eval/golden_set_results.md`). The one remaining answerable failure,
+`gs022` ("What is the expense cap under Aldermere's standard commercial
+terms?", ground truth: capped at 12% of professional fees), is a genuine
+retrieval-ranking gap, not a bug:
+
+- The chunk holding the answer ranks **#13 of 33** by cosine similarity
+  against the query embedding. `TOP_K` (currently 10) doesn't reach it.
+- Two real bugs were found and fixed while investigating this and three
+  sibling failures (gs006/gs020/gs024): `run_golden_set.py` wasn't clearing
+  the vector store between runs (tripling every chunk across retries), and
+  `settings.TOP_K` wasn't wired into the agentic graph's Strategist node at
+  all (it picked its own top_k from a hardcoded prompt range, ignoring
+  config). Both are fixed. gs006/gs020/gs024 now pass; gs022 doesn't,
+  because its chunk's rank (#13) is further out than raising `TOP_K`
+  alone can reasonably reach without retrieving close to half this
+  33-chunk corpus on every query.
+- The actual fix is **hybrid retrieval** (dense embeddings + keyword/BM25,
+  merged) rather than a bigger `TOP_K`: short, numeric, clause-style facts
+  like "12% of professional fees" are exactly what dense bi-encoder
+  embeddings (`BAAI/bge-small-en-v1.5` here) underrank relative to
+  topically-similar prose, and exact keyword matching catches them
+  precisely where embeddings don't. Not implemented yet — tracked here as
+  a known limitation rather than silently left unexplained in a results
+  table.
+
 ## CI merge gate
 
 `.github/workflows/ci.yml` has an `eval-gate` job, after `test`, that runs
