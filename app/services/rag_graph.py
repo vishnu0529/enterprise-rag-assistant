@@ -48,6 +48,7 @@ import re
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command, interrupt
 
+from app.core.config import settings
 from app.core.cost import estimate_cost_usd
 from app.core.tracing import get_tracer
 from app.services.agent_state import RagAgentState
@@ -88,16 +89,20 @@ NO_DOCUMENTS_ANSWER = (
     "Upload a document first via POST /documents."
 )
 
-STRATEGIST_SYSTEM_PROMPT = (
-    "You are the Retrieval Strategist for a proposal-response assistant. You do not write "
-    "answers. A separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
-    "Decide:\n"
-    "1. One or more search queries to run. Use 2-3 only for genuine multi-hop questions "
-    "(e.g. comparing two distinct things, which need separate searches); otherwise one "
-    "focused query is better than several vague ones.\n"
-    "2. How many chunks to retrieve per query (top_k, between 3 and 8).\n\n"
-    'Respond as JSON: {"sub_queries": ["..."], "top_k": <int>, "reasoning": "<one sentence>"}'
-)
+def _strategist_system_prompt() -> str:
+    # The ceiling tracks settings.TOP_K rather than a fixed literal, so
+    # raising that one config value actually widens what the Strategist is
+    # allowed to request instead of being silently capped below it.
+    return (
+        "You are the Retrieval Strategist for a proposal-response assistant. You do not write "
+        "answers. A separate Drafting Agent does that. Your only job is deciding how to search.\n\n"
+        "Decide:\n"
+        "1. One or more search queries to run. Use 2-3 only for genuine multi-hop questions "
+        "(e.g. comparing two distinct things, which need separate searches); otherwise one "
+        "focused query is better than several vague ones.\n"
+        f"2. How many chunks to retrieve per query (top_k, between 3 and {settings.TOP_K}).\n\n"
+        'Respond as JSON: {"sub_queries": ["..."], "top_k": <int>, "reasoning": "<one sentence>"}'
+    )
 
 _SCALAR_SPAN_ATTRS = (
     "top_k",
@@ -183,14 +188,14 @@ def strategize_node(state: RagAgentState) -> dict:
     is_retry = bool(state.get("critique_feedback"))
     prompt = _build_strategize_prompt(state)
     try:
-        result = call_llm_json(STRATEGIST_SYSTEM_PROMPT, prompt)
+        result = call_llm_json(_strategist_system_prompt(), prompt)
         sub_queries = [q for q in result.get("sub_queries", []) if q and q.strip()]
         sub_queries = sub_queries or [state["original_question"]]
-        top_k = int(result.get("top_k") or state.get("requested_top_k") or 4)
+        top_k = int(result.get("top_k") or state.get("requested_top_k") or settings.TOP_K)
         reasoning = result.get("reasoning", "")
     except Exception:
         sub_queries = [state["original_question"]]
-        top_k = state.get("requested_top_k") or 4
+        top_k = state.get("requested_top_k") or settings.TOP_K
         reasoning = ""
 
     updates = {"sub_queries": sub_queries, "top_k": top_k, "strategist_reasoning": reasoning}

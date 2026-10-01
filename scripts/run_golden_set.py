@@ -37,7 +37,7 @@ from app.services.evaluation import evaluate_question
 from app.services.ingestion import chunk_document, load_text
 from app.services.rag_chain import is_refusal
 from app.services.rag_graph import answer_question_agentic
-from app.services.vector_store import upsert_chunks
+from app.services.vector_store import reset_collection, upsert_chunks
 
 MIN_FAITHFULNESS = 0.7
 MIN_CONTEXT_RECALL = 0.5
@@ -64,6 +64,13 @@ def _git_sha() -> str:
 
 
 def _ingest_corpus() -> None:
+    # chunk_document() assigns each chunk a fresh random uuid4, so re-running
+    # this script against a persistent store (e.g. local Qdrant on disk)
+    # without clearing it first silently triples/quadruples every chunk on
+    # every retry. Duplicate points crowd out the real top_k neighbours and
+    # tank context_recall/faithfulness for reasons that have nothing to do
+    # with retrieval quality. Reset first so a retry is always a clean run.
+    reset_collection()
     corpus_dir = Path(__file__).resolve().parent.parent / "sample_docs" / "proposal_corpus"
     for i, doc_path in enumerate(sorted(corpus_dir.glob("*.md"))):
         pages = load_text(doc_path)

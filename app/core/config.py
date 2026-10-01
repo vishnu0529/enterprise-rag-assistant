@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 120
 
     # Retrieval
-    TOP_K: int = 4
+    TOP_K: int = 10
 
     LOG_LEVEL: str = "INFO"
 
