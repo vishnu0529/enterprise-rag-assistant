@@ -59,17 +59,24 @@ with st.sidebar:
     api_base = st.text_input("API base URL", value=API_BASE)
     st.divider()
     st.markdown("### Documents")
+    docs = None
+    docs_error = None
     try:
         # Render's free tier spins the backend down after inactivity and
         # cold-starts in ~30-60s on the next request, so a short timeout here
         # would misreport a cold start as "API unreachable".
-        docs = requests.get(f"{api_base}/documents", headers=_auth_headers(), timeout=70).json()
+        resp = requests.get(f"{api_base}/documents", headers=_auth_headers(), timeout=70)
+        if resp.ok:
+            docs = resp.json()
+        else:
+            docs_error = resp.text
     except requests.RequestException:
-        docs = None
+        pass
 
     if docs is None:
         st.error(
-            f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting, try again in ~30s."
+            docs_error
+            or f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting, try again in ~30s."
         )
     elif not docs:
         st.caption("No documents ingested yet.")
