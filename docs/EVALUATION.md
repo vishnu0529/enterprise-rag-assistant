@@ -23,9 +23,19 @@ whatever `/chat` actually runs, including any Strategist re-planning the
 graph did, not a separate simplified path (`tests/test_rag_graph.py` covers
 the graph's own retry/cap/memory/multi-hop-merge behaviour).
 
-**Pending: a live run against this project's own API key.**
-`scripts/run_evaluation.py` runs the fixed 6-question eval set below through
-the *real* Gemini API and writes real scores here. Running it today produces:
+**Done: the 50-item golden set has a real live run.** 50/50 passed, 12/12
+traps correctly refused, faithfulness 1.00, context recall 1.00, answer
+relevancy 0.89, p50 8,218ms / p95 28,914ms, ~$0.000152/task — see
+[Hybrid retrieval](#hybrid-retrieval-dense--keyword) below and
+`eval/golden_set_results.md` for the full per-item breakdown. These are the
+current, authoritative numbers for this project.
+
+**Still pending: a live run of the smaller fixed 6-question set below.**
+That set is separate from the golden set above and has not been run
+live — it's kept as a fast, human-readable smoke test, not the source of
+truth for the numbers above. `scripts/run_evaluation.py` runs it through
+the *real* Gemini API and writes real scores here. Running it today
+produces:
 
 ```
 google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED.
@@ -68,6 +78,10 @@ averages) and an approximate token-cost estimate, generated directly from a
 live run, not hand-written.
 
 ## Golden set: 50 items, including 12 deliberate traps
+
+**Current result (2026-10-01, commit `1594eeb`): 50/50 passed, 12/12 traps
+correctly refused.** Full breakdown in `eval/golden_set_results.md`; badge
+in `eval/golden_set_metrics.json` reflects this run.
 
 The fixed 6-question set above checks recall on questions the corpus *can*
 answer. `eval/golden_set.json` goes further: 38 answerable questions plus 12
