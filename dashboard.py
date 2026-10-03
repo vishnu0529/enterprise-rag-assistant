@@ -21,30 +21,9 @@ def _auth_headers() -> dict:
 
 st.set_page_config(
     page_title="Proposal Response Assistant",
-    page_icon="📋",
+    page_icon=":material/description:",
     layout="wide",
     initial_sidebar_state="expanded",
-)
-
-st.markdown(
-    """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-*, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
-.header-dark { background: #0f172a; border-radius: 14px; padding: 1.75rem 2rem; margin-bottom: 1.25rem; border: 1px solid rgba(255,255,255,0.06); }
-.header-dark h1 { color: #f8fafc; font-size: 1.6rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.3px; }
-.header-dark p { color: #94a3b8; font-size: 0.85rem; margin: 0; }
-.hbadge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; margin-right: 5px; font-family: 'JetBrains Mono', monospace; }
-.hb-blue { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
-.hb-green { background: #052e16; color: #86efac; border: 1px solid #166534; }
-.hb-purple { background: #2e1065; color: #d8b4fe; border: 1px solid #7e22ce; }
-.chat-u { background: #1e3a5f; color: #e0f2fe; padding: 10px 14px; border-radius: 10px; margin: 6px 0 6px 2rem; font-size: 0.9rem; line-height: 1.5; }
-.chat-a { background: #f8fafc; color: #1e293b; padding: 10px 14px; border-radius: 10px; margin: 6px 2rem 6px 0; font-size: 0.9rem; line-height: 1.5; border: 1px solid #e2e8f0; }
-.citation { background: #fafafa; border-left: 2px solid #6366f1; border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 6px; font-size: 0.8rem; color: #334155; }
-.citation-meta { font-size: 0.72rem; color: #6366f1; font-weight: 600; font-family: 'JetBrains Mono', monospace; margin-bottom: 3px; }
-</style>
-""",
-    unsafe_allow_html=True,
 )
 
 if "session_id" not in st.session_state:
@@ -55,10 +34,10 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = ""
 
 with st.sidebar:
-    st.markdown("### Settings")
+    st.subheader("Settings", anchor=False)
     api_base = st.text_input("API base URL", value=API_BASE)
-    st.divider()
-    st.markdown("### Documents")
+
+    st.subheader("Documents", anchor=False)
     docs = None
     docs_error = None
     try:
@@ -76,16 +55,27 @@ with st.sidebar:
     if docs is None:
         st.error(
             docs_error
-            or f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting, try again in ~30s."
+            or f"Can't reach API at {api_base}. If it's hosted on Render's free tier, it may be cold-starting, try again in ~30s.",
+            icon=":material/error:",
         )
     elif not docs:
         st.caption("No documents ingested yet.")
     else:
-        for d in docs:
-            st.markdown(f"**{d['filename']}** ({d['num_chunks']} chunks)")
+        st.dataframe(
+            [
+                {
+                    "Filename": d["filename"],
+                    "Chunks": d["num_chunks"],
+                    "Uploaded": d["uploaded_at"][:10],
+                }
+                for d in docs
+            ],
+            hide_index=True,
+            width="stretch",
+        )
 
     uploaded = st.file_uploader("Upload a document", type=["pdf", "md", "txt"])
-    if uploaded and st.button("Ingest document", use_container_width=True):
+    if uploaded and st.button("Ingest document", icon=":material/upload:", width="stretch"):
         with st.spinner("Ingesting..."):
             resp = requests.post(
                 f"{api_base}/documents",
@@ -99,8 +89,7 @@ with st.sidebar:
         else:
             st.error(resp.text)
 
-    st.divider()
-    st.markdown("### Memory")
+    st.subheader("Memory", anchor=False)
     st.session_state.user_id = st.text_input(
         "User ID (optional)",
         value=st.session_state.user_id,
@@ -108,71 +97,61 @@ with st.sidebar:
         "even after starting a new session below. Leave blank for no cross-session memory.",
     )
 
-    st.divider()
-    if st.button("New session", use_container_width=True):
+    if st.button("New session", icon=":material/add_circle:", width="stretch"):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
         st.rerun()  # user_id is intentionally NOT reset; that's what makes memory cross-session
 
-    st.divider()
-    st.markdown("[GitHub](https://github.com/vishnu0529/enterprise-rag-assistant) · v0.1")
+    st.caption("[GitHub](https://github.com/vishnu0529/enterprise-rag-assistant) · v0.1")
 
-st.markdown(
-    """
-<div class="header-dark">
-<h1>📋 Proposal Response Assistant</h1>
-<p>Bid-team RAG: drafts answers from your own proposals, credentials and rate card, every claim cited</p>
-<div style="margin-top:10px;">
-<span class="hbadge hb-blue">Qdrant</span>
-<span class="hbadge hb-green">FastAPI</span>
-<span class="hbadge hb-purple">Cited answers</span>
-</div>
-</div>
-""",
-    unsafe_allow_html=True,
+st.title(":material/description: Proposal Response Assistant")
+st.caption(
+    "Bid-team RAG: drafts answers from your own proposals, credentials and rate card, "
+    "every claim cited"
 )
+with st.container(horizontal=True):
+    st.badge("Qdrant", icon=":material/database:", color="blue")
+    st.badge("FastAPI", icon=":material/bolt:", color="green")
+    st.badge("Cited answers", icon=":material/link:", color="violet")
 
 st.info(
     "The backend runs on Render's free tier, which sleeps after ~15 minutes of "
     "inactivity. If your first request fails or times out, that's expected. "
-    "wait ~30-60s for it to wake up, then try again.",
-    icon="⏳",
+    "Wait ~30-60s for it to wake up, then try again.",
+    icon=":material/schedule:",
 )
 
 for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f'<div class="chat-u">{msg["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="chat-a">{msg["content"]}</div>', unsafe_allow_html=True)
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
         if msg.get("sub_queries"):
             queries = ", ".join(f"“{q}”" for q in msg["sub_queries"])
+            n = len(msg["sub_queries"])
             with st.expander(
-                f"🧭 Retrieval Strategist's plan: {len(msg['sub_queries'])} quer{'y' if len(msg['sub_queries']) == 1 else 'ies'}"
+                f"Retrieval Strategist's plan: {n} quer{'y' if n == 1 else 'ies'}",
+                icon=":material/route:",
             ):
                 st.markdown(f"**Searched for:** {queries}")
                 if msg.get("strategist_reasoning"):
                     st.caption(msg["strategist_reasoning"])
         if msg.get("citations"):
-            with st.expander(f"📎 {len(msg['citations'])} source(s)"):
+            with st.expander(f"{len(msg['citations'])} source(s)", icon=":material/link:"):
                 for c in msg["citations"]:
                     loc = f"p.{c['page']}" if c.get("page") else f"chunk {c['chunk_index']}"
-                    st.markdown(
-                        f'<div class="citation"><div class="citation-meta">'
-                        f"{c['filename']} ({loc}) · score {c['score']:.2f}</div>"
-                        f"{c['text']}</div>",
-                        unsafe_allow_html=True,
-                    )
+                    with st.container(border=True):
+                        st.caption(f"{c['filename']} ({loc}) · score {c['score']:.2f}")
+                        st.text(c["text"])
         if msg.get("latency_ms") is not None:
             st.caption(
-                f"⏱ {msg['latency_ms']:.0f}ms · "
+                f":material/timer: {msg['latency_ms']:.0f}ms · "
                 f"{msg['prompt_tokens']}+{msg['completion_tokens']} tokens"
             )
         if msg.get("faithfulness_score") is not None:
-            extras = [f"✅ faithfulness {msg['faithfulness_score']:.2f}"]
+            extras = [f":material/check_circle: faithfulness {msg['faithfulness_score']:.2f}"]
             if msg.get("retries"):
-                extras.append(f"🔁 Strategist re-planned {msg['retries']}x")
+                extras.append(f":material/refresh: Strategist re-planned {msg['retries']}x")
             if msg.get("used_memory"):
-                extras.append("🧠 recalled a past session")
+                extras.append(":material/psychology: recalled a past session")
             st.caption(" · ".join(extras))
 
 question = st.chat_input("Ask a question about your documents...")
@@ -219,7 +198,10 @@ if question:
             or cold_start_status
         )
         if is_cold_start:
-            content = "⏳ The backend looks like it's still waking up from Render's free-tier sleep. Wait ~30-60s and try again."
+            content = (
+                "The backend looks like it's still waking up from Render's free-tier "
+                "sleep. Wait ~30-60s and try again."
+            )
         else:
             content = f"Error contacting API: {exc}"
         st.session_state.messages.append({"role": "assistant", "content": content})
