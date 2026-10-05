@@ -18,7 +18,7 @@
 
 **Live demo:** [Streamlit dashboard](https://enterprise-rag-assistant-iyq9apbv2jeyby3xxqx3ce.streamlit.app/) · backend on Render (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how both are wired together, including a shared API-key gate. The demo only holds the synthetic `sample_docs/proposal_corpus/` documents, never a real client's).
 
-Full docs: [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Failure Modes](docs/FAILURE_MODES.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
+Full docs: [PRD](docs/PRD.md) · [Technical Design](docs/TDD.md) · [Architecture](docs/ARCHITECTURE.md) · [Evaluation](docs/EVALUATION.md) · [Deployment](docs/DEPLOYMENT.md) · [Failure Modes](docs/FAILURE_MODES.md) · [Agent Production Readiness Scorecard](https://claude.ai/code/artifact/5c6af602-27b4-4bc1-af7b-c2cb501da89c) (this repo scored against all 15 items)
 
 <p align="center"><img src="docs/graph.png" alt="The real compiled corrective-RAG graph" width="360"></p>
 
@@ -273,7 +273,7 @@ rather than partially built everywhere:
 - **Next.js/TypeScript frontend** (currently a Streamlit demo UI)
 - **Word document and web-page ingestion** (currently PDF/Markdown/txt)
 - **Streaming chat responses**
-- **Hybrid search** (BM25 + vector) and **reranking**
+- **Reranking** (hybrid dense+BM25 search is already implemented, see [docs/EVALUATION.md](docs/EVALUATION.md#hybrid-retrieval-dense--keyword))
 - **Parent-document retrieval**
 - **MCP tool support**
 - **A portfolio domain** for the live demo (currently on Render/Streamlit Cloud's default subdomains)
