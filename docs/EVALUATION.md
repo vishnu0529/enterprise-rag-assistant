@@ -23,12 +23,23 @@ whatever `/chat` actually runs, including any Strategist re-planning the
 graph did, not a separate simplified path (`tests/test_rag_graph.py` covers
 the graph's own retry/cap/memory/multi-hop-merge behaviour).
 
-**Done: the 50-item golden set has a real live run.** 50/50 passed, 12/12
-traps correctly refused, faithfulness 1.00, context recall 1.00, answer
-relevancy 0.89, p50 8,218ms / p95 28,914ms, ~$0.000152/task — see
+**Done: the 50-item golden set has a real live run.** Most recent run
+(2026-10-05, commit `745c7ed`): 50/50 passed, 12/12 traps correctly refused,
+faithfulness 1.00, context recall 1.00, answer relevancy 0.88, p50 7,654ms /
+p95 23,943ms (mean 10,700ms), ~$0.000145/task — see
 [Hybrid retrieval](#hybrid-retrieval-dense--keyword) below and
 `eval/golden_set_results.md` for the full per-item breakdown. These are the
 current, authoritative numbers for this project.
+
+**Known flakiness: do not read 50/50 as deterministic.** `eval/metrics_history.jsonl`
+has five live runs against the same or near-identical code: three consecutive
+reruns at commit `27b1635` scored 94%, 92%, and 96% (47, 46, and 48/50) before
+a hybrid-retrieval fix landed; the following two runs (`254edff` on 2026-10-01
+and `745c7ed` on 2026-10-05) both scored 100%. The traps have never failed
+across any run — only a small number of answerable items occasionally flip,
+consistent with normal live-LLM variance rather than a regression. Treat any
+single "50/50" badge as one sample from a distribution that has run as low as
+92%, not a guarantee every future run will match it.
 
 **Still pending: a live run of the smaller fixed 6-question set below.**
 That set is separate from the golden set above and has not been run
@@ -79,9 +90,10 @@ live run, not hand-written.
 
 ## Golden set: 50 items, including 12 deliberate traps
 
-**Current result (2026-10-01, commit `1594eeb`): 50/50 passed, 12/12 traps
+**Current result (2026-10-05, commit `745c7ed`): 50/50 passed, 12/12 traps
 correctly refused.** Full breakdown in `eval/golden_set_results.md`; badge
-in `eval/golden_set_metrics.json` reflects this run.
+in `eval/golden_set_metrics.json` reflects this run. See the flakiness note
+above — prior runs at this commit's predecessor ranged 92-100%.
 
 The fixed 6-question set above checks recall on questions the corpus *can*
 answer. `eval/golden_set.json` goes further: 38 answerable questions plus 12
