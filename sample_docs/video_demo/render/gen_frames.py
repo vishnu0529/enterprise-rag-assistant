@@ -1,8 +1,7 @@
 from pathlib import Path
 
+from manifest import SEGMENTS, STAGES
 from PIL import Image, ImageDraw, ImageFont
-
-from manifest import STAGES, SEGMENTS
 
 ROOT = Path(__file__).parent
 FRAMES = ROOT / "frames"
@@ -19,7 +18,8 @@ ACCENT_WASH = (28, 39, 64)
 GOOD = (95, 190, 132)
 
 MONO = "/System/Library/Fonts/Menlo.ttc"
-DISPLAY = "/System/Library/Fonts/SFNS.ttf" if Path("/System/Library/Fonts/SFNS.ttf").exists() else MONO
+_SFNS = "/System/Library/Fonts/SFNS.ttf"
+DISPLAY = _SFNS if Path(_SFNS).exists() else MONO
 
 
 def font(path, size):
@@ -41,7 +41,12 @@ def draw_pipeline(d, cx, cy, active, box_w=280, box_h=86, gap=56, font_size=22):
         is_active = stage in active
         fill = ACCENT_WASH if is_active else PANEL
         outline = ACCENT if is_active else LINE
-        d.rectangle([(bx, y0), (bx + box_w, y0 + box_h)], fill=fill, outline=outline, width=3 if is_active else 2)
+        d.rectangle(
+            [(bx, y0), (bx + box_w, y0 + box_h)],
+            fill=fill,
+            outline=outline,
+            width=3 if is_active else 2,
+        )
         bbox = d.textbbox((0, 0), stage, font=f)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         color = INK if is_active else INK_FAINT
@@ -84,7 +89,10 @@ def draw_diagram_frame(seg):
         bw = bbox4[2] - bbox4[0]
         d.text(((W - bw) / 2, 285), byline, font=f_byline, fill=ACCENT)
 
-    draw_pipeline(d, W / 2, H / 2, seg.get("active_stages", []), box_w=300, box_h=110, gap=50, font_size=24)
+    draw_pipeline(
+        d, W / 2, H / 2, seg.get("active_stages", []),
+        box_w=300, box_h=110, gap=50, font_size=24,
+    )
 
     foot = "five stages, each with its own failure mode and its own control"
     f_foot = font(MONO, 22)
@@ -160,7 +168,11 @@ def draw_scorecard_frame(seg):
     d.text((80, 140), seg["header"], font=f_header, fill=ACCENT)
     d.line([(80, 200), (W - 80, 200)], fill=LINE, width=2)
 
-    cols = [("9", "Demonstrated", GOOD), ("5", "Partial", (210, 165, 63)), ("1", "Open", (217, 123, 99))]
+    cols = [
+        ("9", "Demonstrated", GOOD),
+        ("5", "Partial", (210, 165, 63)),
+        ("1", "Open", (217, 123, 99)),
+    ]
     col_w = (W - 160) / 3
     for i, (n, lbl, color) in enumerate(cols):
         cx = 80 + col_w * i + col_w / 2

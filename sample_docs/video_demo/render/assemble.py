@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 
 import imageio_ffmpeg
-
 from manifest import SEGMENTS
 
 ROOT = Path(__file__).parent
