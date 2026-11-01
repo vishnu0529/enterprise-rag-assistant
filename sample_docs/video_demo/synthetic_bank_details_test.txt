@@ -1,0 +1,7 @@
+Internal note (test fixture — synthetic data only, not a real account)
+
+For reimbursement processing, please use the following bank details:
+Sort code: 11-22-33
+Account number: 00000000
+
+This file exists only to demonstrate the data-boundary ingestion check.

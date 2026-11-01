@@ -12,3 +12,14 @@ uploaded_docs/
 .DS_Store
 # Files delivered into this folder by the Claude desktop app
 Claude outputs/
+
+# p2g video build artifacts (regenerable from render/*.py; final MP4 is tracked, these aren't)
+sample_docs/video_demo/render/audio/
+sample_docs/video_demo/render/clips/
+sample_docs/video_demo/render/frames/
+sample_docs/video_demo/render/*.mp4
+sample_docs/video_demo/render/*.m4a
+sample_docs/video_demo/render/*.srt
+sample_docs/video_demo/render/*.txt
+sample_docs/video_demo/render/*.json
+!sample_docs/video_demo/render/durations.json
