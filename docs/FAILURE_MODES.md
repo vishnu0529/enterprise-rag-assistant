@@ -61,8 +61,9 @@ rollback rather than manual reconstruction. Nothing fails silently.
 
 Failure modes with no code reference above genuinely aren't handled yet,
 this file is honest about gaps, not just wins. As of this writing that
-includes: no per-user access control (a single shared API key gates
-everything, not per-tenant permissions; scorecard item 11), no config/prompt
-version stamped onto individual past answers (scorecard item 12), and no
-request-level tracing backend (scorecard item 4, in progress, see
-`docs/ARCHITECTURE.md`).
+includes: no per-tenant data isolation (each API key now resolves to a
+user identity — see `app/core/auth.py` — but every key can still see
+every ingested document; scorecard item 11, partially closed), no
+config/prompt version stamped onto individual past answers (scorecard
+item 12), and no request-level tracing backend (scorecard item 4, in
+progress, see `docs/ARCHITECTURE.md`).

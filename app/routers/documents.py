@@ -1,3 +1,4 @@
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -13,14 +14,21 @@ from app.services.data_boundary import enforce as enforce_data_boundary
 from app.services.ingestion import SUPPORTED_EXTENSIONS, chunk_document, load_text
 from app.services.vector_store import delete_document, upsert_chunks
 
-router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/documents", tags=["documents"])
+
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path("uploaded_docs")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @router.post("", response_model=IngestResponse)
-async def ingest_document(file: UploadFile = File(...), session: Session = Depends(get_session)):
+async def ingest_document(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user_id: str | None = Depends(require_api_key),
+):
+    logger.info("document ingest requested by user_id=%s filename=%s", user_id, file.filename)
     suffix = Path(file.filename).suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
@@ -64,15 +72,23 @@ async def ingest_document(file: UploadFile = File(...), session: Session = Depen
 
 
 @router.get("", response_model=list[DocumentOut])
-def list_documents(session: Session = Depends(get_session)):
+def list_documents(
+    session: Session = Depends(get_session),
+    user_id: str | None = Depends(require_api_key),
+):
     return session.exec(select(Document)).all()
 
 
 @router.delete("/{document_id}")
-def remove_document(document_id: str, session: Session = Depends(get_session)):
+def remove_document(
+    document_id: str,
+    session: Session = Depends(get_session),
+    user_id: str | None = Depends(require_api_key),
+):
     doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, "Document not found")
+    logger.info("document delete requested by user_id=%s document_id=%s", user_id, document_id)
     delete_document(document_id)
 
     # ingest_document saves the raw upload to UPLOAD_DIR/{document_id}{suffix}

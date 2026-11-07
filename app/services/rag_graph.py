@@ -592,6 +592,7 @@ def answer_question_agentic(
     tracer = get_tracer()
     with tracer.start_as_current_span("answer_question") as span:
         span.set_attribute("rag.session_id", session_id or "no-session")
+        span.set_attribute("rag.user_id", user_id or "anonymous")
         span.set_attribute("rag.require_approval", require_approval)
         result = graph.invoke(initial_state, config=config)
         latency_ms = (time.perf_counter() - start) * 1000

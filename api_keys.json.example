@@ -1,0 +1,4 @@
+[
+  {"api_key": "demo-bid-director-key", "user_id": "demo-bid-director", "name": "Demo Bid Director"},
+  {"api_key": "demo-admin-key", "user_id": "demo-admin", "name": "Demo Admin"}
+]

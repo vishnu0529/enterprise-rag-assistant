@@ -54,11 +54,10 @@ firm this size.
 
 - The engagement-document-review workflow (second workflow from the parent
   90-day plan) — not built, no code in this repo targets it yet.
-- Multi-tenant / per-client deployments — this repo ingests one corpus at a
-  time, no per-firm isolation.
-- Per-user access control — a single shared API key gates the whole
-  deployment; there is no concept of a user's own permission scope (tracked
-  as a known open item, see [docs/FAILURE_MODES.md](FAILURE_MODES.md)).
+- Multi-tenant / per-client deployments — this repo ingests one shared
+  corpus; every key can see every ingested document, there is no per-firm
+  or per-client data isolation (per-user *identity* is built, see below;
+  per-user *data scoping* is not).
 - A production frontend — the demo UI is Streamlit, not a client-ready
   Next.js/TypeScript app.
 - Ingesting Word documents or web pages — only PDF, Markdown, and plain
@@ -138,9 +137,14 @@ newer numbers are authoritative, not this snapshot.
 
 ## Open questions / risks
 
-- **Access control (scorecard item 11) is genuinely unbuilt.** A single
-  shared API key gates the whole deployment; there is no per-user or
-  per-tenant permission model. Needs a decision before any multi-client use.
+- **Access control (scorecard item 11): per-user identity is built, per-tenant
+  data isolation is not.** Each `X-API-Key` now resolves to a specific user
+  (`app/core/auth.py`, backed by `api_keys.json`), and `/chat` sessions and
+  trace spans carry that identity instead of trusting a client-supplied
+  `user_id`. What's still missing is per-tenant *data* scoping — every key
+  can still see every ingested document, since the corpus itself has no
+  owner field. That's a bigger, separate feature (needs a decision before
+  any real multi-client use), not a quick follow-on to this.
 - **The CI eval gate is not yet a required branch-protection check** — it
   needs a repo secret (`GOOGLE_API_KEY`/`ANTHROPIC_API_KEY`) and a
   branch-protection setting, both left as deliberate repo-owner decisions

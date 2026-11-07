@@ -47,8 +47,12 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # API access
-    # Shared-secret gate for /documents, /chat, /evaluate. See app/core/auth.py.
-    # Empty (the local-dev default) disables the gate entirely.
+    # Per-user API-key gate for /documents, /chat, /evaluate. See app/core/auth.py.
+    # API_KEYS_FILE points at a JSON file mapping api_key -> user_id (see
+    # api_keys.json.example). Empty/missing file falls back to the single
+    # legacy API_KEY mapped to user_id "default"; empty API_KEY too (the
+    # local-dev default) disables the gate entirely.
+    API_KEYS_FILE: str = "api_keys.json"
     API_KEY: str = ""
 
     # Tracing. See app/core/tracing.py. Empty (dev default): spans print to

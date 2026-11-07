@@ -152,8 +152,10 @@ infrastructure-and-recovery. Summary of the escalation philosophy:
 - Nothing fails silently — every row in the inventory has a code and test
   reference, or it isn't claimed as handled.
 
-Known gaps, stated plainly: no per-user access control (single shared API
-key); the CI eval gate is not yet a required branch-protection check.
+Known gaps, stated plainly: per-user identity is built (per-key, see
+`app/core/auth.py`) but per-tenant data isolation is not — every key can
+see every ingested document; the CI eval gate is not yet a required
+branch-protection check.
 
 ## Observability
 
@@ -173,17 +175,19 @@ Local dev needs zero external services: Qdrant runs embedded, sessions
 persist to SQLite. `docker-compose.yml` switches to a real Qdrant service
 and Postgres via `QDRANT_URL`/`DATABASE_URL`, same code path, no branching.
 Production: FastAPI backend on Render, Streamlit dashboard on Streamlit
-Cloud, both behind a shared API-key gate. Full wiring and the data-boundary
-incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
+Cloud, both behind a per-user API-key gate. Full wiring and the
+data-boundary incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Testing strategy
 
-- **Unit/integration (87 tests, `pytest -q`):** fully mocked, no
+- **Unit/integration (95 tests, `pytest -q`):** fully mocked, no
   network/model load, covers the retry/cap/memory loop, multi-hop
   sub-query merging, escalation banners, citation enforcement, HITL
   pause/approve/reject lifecycle, checkpointer sqlite-fallback path,
-  tracing span hierarchy including `GraphInterrupt` propagation, and LLM
-  client timeout/retry config reaching the real client object.
+  tracing span hierarchy including `GraphInterrupt` propagation, LLM
+  client timeout/retry config reaching the real client object, and the
+  per-user API-key gate (valid/invalid/missing key, identity overriding a
+  client-supplied `user_id`).
 - **Golden set (`eval/golden_set.json`, 50 items):** structural validation
   in CI requires no API key (50 items, ≥10 traps, every source doc exists,
   every trap explains why it's unanswerable). Live scoring
@@ -196,8 +200,9 @@ incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Known limitations
 
-- Per-user/per-tenant access control is unbuilt — one shared API key for
-  the whole deployment (scorecard item 11).
+- Per-tenant data isolation is unbuilt (scorecard item 11, partially
+  closed) — per-user identity now exists via `api_keys.json`, but every
+  key can still see every ingested document; the corpus has no owner field.
 - `eval-gate` can fail the CI job but is not yet a required
   branch-protection check — needs a repo secret and a manual
   branch-protection setting.

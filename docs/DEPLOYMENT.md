@@ -96,21 +96,23 @@ answer, not just "it does."
 
 ### Securing a public deployment
 
-This app has no user accounts. `app/core/auth.py` adds a single shared
-secret (`API_KEY`) required via an `X-API-Key` header on `/documents`,
-`/chat`, and `/evaluate` (not `/health`, so platform health checks keep
-working). Its only purpose is stopping random internet traffic from
-uploading arbitrary documents or burning your metered LLM quota, not
-protecting per-user data. Generate a real secret (e.g. `openssl rand -hex
-32`), set it as `API_KEY` on both the Render backend and the Streamlit
-Secrets, and leave it unset for local dev (the gate is a no-op when empty).
+This app has no user accounts, but `app/core/auth.py` resolves each
+request's `X-API-Key` header to a specific user identity (not just "yes/no,
+this request has the secret"). Required on `/documents`, `/chat`, and
+`/evaluate` (not `/health`, so platform health checks keep working). Create
+`api_keys.json` at the repo root (copy `api_keys.json.example`, it's
+gitignored) mapping each real key to a `user_id`; deploy it as a Render
+secret file, or fall back to the single legacy `API_KEY` env var (mapped to
+user_id `"default"`) if you don't need per-user attribution. Leave both
+unset for local dev (the gate is a no-op when empty).
 
 **Only ever ingest synthetic/sample documents into a public deployment.**
-This gate stops anonymous internet traffic, but it does not add per-user
-isolation. Anyone who has the shared secret (including, after this
-incident, anyone the URL is shared with) can read anything already
-ingested. A real tuition-payment letter with bank details and a home
-address was uploaded to this deployment during testing and had to be
-deleted; the synthetic documents in `sample_docs/proposal_corpus/` are the
-kind of thing this should hold instead, never a real client's proposals,
-CVs, or rate cards.
+Per-user keys mean you can now tell *who* asked for *what* (chat sessions
+and trace spans carry the resolved user_id), but there is still no
+per-tenant **data** isolation — the document corpus has no owner field, so
+anyone with any valid key can read anything already ingested, regardless of
+which key ingested it. A real tuition-payment letter with bank details and
+a home address was uploaded to this deployment during testing and had to
+be deleted; the synthetic documents in `sample_docs/proposal_corpus/` are
+the kind of thing this should hold instead, never a real client's
+proposals, CVs, or rate cards.

@@ -10,7 +10,7 @@ from app.models.schemas import ApprovalRequest, ChatRequest, ChatResponse, Docum
 from app.services.rag_graph import NO_DOCUMENTS_ANSWER, answer_question_agentic, resume_approval
 from app.services.session_store import add_message, get_history, get_or_create_session
 
-router = APIRouter(tags=["chat"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["chat"])
 
 
 def _to_response(session_id: str, result: dict) -> ChatResponse:
@@ -39,9 +39,20 @@ def _to_response(session_id: str, result: dict) -> ChatResponse:
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest, session: Session = Depends(get_session)):
+def chat(
+    request: ChatRequest,
+    session: Session = Depends(get_session),
+    authenticated_user: str | None = Depends(require_api_key),
+):
+    # When a key gate is configured, the authenticated identity is
+    # authoritative over whatever user_id the client claims in the request
+    # body — otherwise any caller could read another user's cross-session
+    # memory just by setting user_id in the payload. Unauthenticated (no
+    # gate configured, local dev) falls back to the client-supplied value,
+    # unchanged from before.
+    effective_user_id = authenticated_user or request.user_id
     session_id = request.session_id or str(uuid.uuid4())
-    get_or_create_session(session, session_id, user_id=request.user_id)
+    get_or_create_session(session, session_id, user_id=effective_user_id)
     history = get_history(session, session_id)
 
     # Cheap DB check before spending a Strategist LLM call on a corpus
@@ -65,7 +76,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)):
         top_k=request.top_k,
         document_id=request.document_id,
         history=history,
-        user_id=request.user_id,
+        user_id=effective_user_id,
         session_id=session_id,
         require_approval=request.require_approval,
     )

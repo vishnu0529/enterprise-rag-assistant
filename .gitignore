@@ -3,6 +3,7 @@ __pycache__/
 venv/
 .venv/
 .env
+api_keys.json
 *.db
 qdrant_data/
 uploaded_docs/
