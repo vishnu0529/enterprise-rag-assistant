@@ -125,7 +125,7 @@ Current measured state (`eval/golden_set_results.md`, commit `745c7ed`,
 | Answer relevancy | 0.88 |
 | Latency | p50 7,654ms / p95 23,943ms |
 | Cost per task | ~$0.000145 |
-| Test suite | 86/86 passing |
+| Test suite | 87/87 passing |
 
 Note: this pass rate is one sample, not a guarantee. `eval/metrics_history.jsonl`
 shows three reruns at an earlier commit scoring 94%/92%/96% before a

@@ -52,7 +52,7 @@ beyond the API, a vector store, and a relational store — see
 | Session storage | SQLModel: SQLite (dev) / PostgreSQL (prod) | same local-first-dev / production-shaped-deploy split throughout |
 | Graph checkpointing | `langgraph-checkpoint-postgres` (`PostgresSaver`) prod, `MemorySaver` dev | durable resume is a hard prerequisite for `interrupt()`, not optional |
 | Tracing | OpenTelemetry | one span per node, console exporter dev / OTLP prod |
-| Testing | pytest, 86 tests, fully mocked | no network/model load required in CI |
+| Testing | pytest, 87 tests, fully mocked | no network/model load required in CI |
 | Containers / CI | Docker, docker-compose, GitHub Actions (lint → test → docker build → eval-gate → publish-eval-metrics) | |
 
 ## Component design
@@ -178,7 +178,7 @@ incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Testing strategy
 
-- **Unit/integration (86 tests, `pytest -q`):** fully mocked, no
+- **Unit/integration (87 tests, `pytest -q`):** fully mocked, no
   network/model load, covers the retry/cap/memory loop, multi-hop
   sub-query merging, escalation banners, citation enforcement, HITL
   pause/approve/reject lifecycle, checkpointer sqlite-fallback path,
