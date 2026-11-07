@@ -90,8 +90,14 @@ def draw_diagram_frame(seg):
         d.text(((W - bw) / 2, 285), byline, font=f_byline, fill=ACCENT)
 
     draw_pipeline(
-        d, W / 2, H / 2, seg.get("active_stages", []),
-        box_w=300, box_h=110, gap=50, font_size=24,
+        d,
+        W / 2,
+        H / 2,
+        seg.get("active_stages", []),
+        box_w=300,
+        box_h=110,
+        gap=50,
+        font_size=24,
     )
 
     foot = "five stages, each with its own failure mode and its own control"

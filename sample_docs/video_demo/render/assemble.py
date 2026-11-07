@@ -34,10 +34,16 @@ def make_silent_video_clips():
             f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(dur - 0.25, 0):.3f}:d=0.25"
         )
         run(
-            "-i", str(img),
-            "-vf", vf,
-            "-r", "25",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-i",
+            str(img),
+            "-vf",
+            vf,
+            "-r",
+            "25",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
             str(out),
         )
         print(f"video clip: {out}")
@@ -45,9 +51,7 @@ def make_silent_video_clips():
 
 def concat_video():
     listfile = ROOT / "concat_video_list.txt"
-    listfile.write_text(
-        "\n".join(f"file '{CLIPS / (s['id'] + '_video.mp4')}'" for s in SEGMENTS)
-    )
+    listfile.write_text("\n".join(f"file '{CLIPS / (s['id'] + '_video.mp4')}'" for s in SEGMENTS))
     out = ROOT / "video_only.mp4"
     run("-f", "concat", "-safe", "0", "-i", str(listfile), "-c", "copy", str(out))
     print(f"concatenated video: {out}")
@@ -59,13 +63,21 @@ def concat_audio():
     then encode to AAC exactly once. Avoids the per-clip AAC-encoder-restart click that a
     stream-copy concat of separately-encoded AAC clips produces at every cut."""
     listfile = ROOT / "concat_audio_list.txt"
-    listfile.write_text(
-        "\n".join(f"file '{AUDIO / (s['id'] + '.aiff')}'" for s in SEGMENTS)
-    )
+    listfile.write_text("\n".join(f"file '{AUDIO / (s['id'] + '.aiff')}'" for s in SEGMENTS))
     out = ROOT / "narration_master.m4a"
     run(
-        "-f", "concat", "-safe", "0", "-i", str(listfile),
-        "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(listfile),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "44100",
         str(out),
     )
     print(f"concatenated audio: {out}")
@@ -75,9 +87,18 @@ def concat_audio():
 def mux(video_path, audio_path):
     out = ROOT / "walkthrough_no_subs.mp4"
     run(
-        "-i", str(video_path), "-i", str(audio_path),
-        "-c:v", "copy", "-c:a", "copy",
-        "-map", "0:v:0", "-map", "1:a:0",
+        "-i",
+        str(video_path),
+        "-i",
+        str(audio_path),
+        "-c:v",
+        "copy",
+        "-c:a",
+        "copy",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
         "-shortest",
         str(out),
     )
@@ -137,9 +158,12 @@ def burn_subs(video_path):
         "MarginV=60"
     )
     run(
-        "-i", str(video_path),
-        "-vf", f"subtitles={srt}:force_style='{style}'",
-        "-c:a", "copy",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"subtitles={srt}:force_style='{style}'",
+        "-c:a",
+        "copy",
         str(out),
     )
     print(f"FINAL: {out}")
