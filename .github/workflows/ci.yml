@@ -49,6 +49,13 @@ jobs:
     env:
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Gemini's free tier caps at 10 requests/min (see app/core/config.py's
+      # LLM_MIN_INTERVAL_SECONDS comment); run_golden_set.py fires many calls
+      # per item (strategize/draft/critique, plus a judge call per retrieved
+      # chunk for context_precision), well over that cap with no pacing.
+      # Without this, every item fails on 429 RESOURCE_EXHAUSTED regardless
+      # of answer quality — not a real regression, just rate-limiting.
+      LLM_MIN_INTERVAL_SECONDS: "6.5"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

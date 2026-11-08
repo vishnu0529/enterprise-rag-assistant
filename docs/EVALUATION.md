@@ -171,6 +171,18 @@ and `eval-gate` is a required status check under branch protection for
 reports a warning. (Enabling this was a deliberate, one-time call by the
 repo owner, not something switched on silently.)
 
+The first run with the secret live failed 0/50, not from a real regression:
+Gemini's free tier caps at 10 requests/min, and `run_golden_set.py` fires
+several calls per item (strategist, drafter, critique, plus one
+`context_precision` judge call per retrieved chunk) with no pacing between
+them, so it hit `429 RESOURCE_EXHAUSTED` immediately. Fixed by setting
+`LLM_MIN_INTERVAL_SECONDS: "6.5"` in the `eval-gate` job's env in
+`ci.yml` — the app already supported this exact scenario (see the setting's
+comment in `app/core/config.py`), it just wasn't turned on for CI. This
+makes the job noticeably slower (several minutes, paced one call at a time)
+but genuinely correct — see the Trend section below for actual pass/fail
+results against this pacing.
+
 Once the secret is set, a separate `publish-eval-metrics` job, running only
 on pushes to `main`, after `eval-gate` passes, runs
 `scripts/update_eval_chart.py` and commits the refreshed
