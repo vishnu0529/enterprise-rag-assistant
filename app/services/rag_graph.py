@@ -226,7 +226,14 @@ def retrieve_node(state: RagAgentState) -> dict:
     sub_queries = state.get("sub_queries") or [state["original_question"]]
     all_chunks = []
     for q in sub_queries:
-        all_chunks.extend(search(q, top_k=state.get("top_k"), document_id=state.get("document_id")))
+        all_chunks.extend(
+            search(
+                q,
+                top_k=state.get("top_k"),
+                document_id=state.get("document_id"),
+                owner_id=state.get("owner_id"),
+            )
+        )
     chunks = _merge_and_dedupe(all_chunks)
     return {"chunks": chunks, "no_documents": not chunks}
 
@@ -553,6 +560,7 @@ def answer_question_agentic(
     user_id: str | None = None,
     session_id: str = "",
     require_approval: bool = False,
+    owner_id: str | None = None,
 ) -> dict:
     """Drop-in replacement for rag_chain.answer_question with the same
     return shape, plus faithfulness_score/retries/sub_queries for callers
@@ -562,7 +570,13 @@ def answer_question_agentic(
     set, and every existing caller) never pauses: approval_gate_node is a
     no-op. Only opt-in callers can hit pending_approval=True in the result,
     which must then be resolved via resume_approval() before this session's
-    answer is available."""
+    answer is available.
+
+    owner_id scopes retrieval to one tenant (see vector_store.search).
+    Distinct from user_id, which is only used for cross-session memory
+    recall: routers/chat.py passes the authenticated identity for owner_id
+    specifically so a client-supplied user_id in the request body can't be
+    used to read another tenant's documents."""
     import time
 
     start = time.perf_counter()
@@ -573,6 +587,7 @@ def answer_question_agentic(
         "document_id": document_id,
         "history": history or [],
         "user_id": user_id,
+        "owner_id": owner_id,
         "session_id": session_id,
         "require_approval": require_approval,
         "prompt_tokens": 0,
@@ -593,6 +608,7 @@ def answer_question_agentic(
     with tracer.start_as_current_span("answer_question") as span:
         span.set_attribute("rag.session_id", session_id or "no-session")
         span.set_attribute("rag.user_id", user_id or "anonymous")
+        span.set_attribute("rag.owner_id", owner_id or "unscoped")
         span.set_attribute("rag.require_approval", require_approval)
         result = graph.invoke(initial_state, config=config)
         latency_ms = (time.perf_counter() - start) * 1000

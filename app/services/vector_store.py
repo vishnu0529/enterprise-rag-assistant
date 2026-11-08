@@ -52,7 +52,10 @@ def _ensure_collection(client: QdrantClient) -> None:
 
 
 def upsert_chunks(chunks: list[dict]) -> int:
-    """chunks: list of {chunk_id, document_id, filename, text, page, chunk_index}"""
+    """chunks: list of {chunk_id, document_id, filename, text, page, chunk_index,
+    owner_id}. owner_id is the ingesting user's resolved identity (None when
+    no API-key gate is configured); stamped onto the payload so search() can
+    scope retrieval to it later."""
     client = get_client()
     texts = [c["text"] for c in chunks]
     vectors = embed_texts(texts)
@@ -66,6 +69,7 @@ def upsert_chunks(chunks: list[dict]) -> int:
                 "text": c["text"],
                 "page": c.get("page"),
                 "chunk_index": c["chunk_index"],
+                "owner_id": c.get("owner_id"),
             },
         )
         for c, vector in zip(chunks, vectors, strict=True)
@@ -82,22 +86,28 @@ def _payload_to_chunk(payload: dict) -> dict:
         "text": payload["text"],
         "page": payload.get("page"),
         "chunk_index": payload["chunk_index"],
+        "owner_id": payload.get("owner_id"),
     }
 
 
 def _dense_search(
-    client: QdrantClient, query: str, limit: int, document_id: str | None
+    client: QdrantClient,
+    query: str,
+    limit: int,
+    document_id: str | None,
+    owner_id: str | None,
 ) -> list[dict]:
     query_vector = embed_query(query)
-    query_filter = None
+    conditions = []
     if document_id:
-        query_filter = qmodels.Filter(
-            must=[
-                qmodels.FieldCondition(
-                    key="document_id", match=qmodels.MatchValue(value=document_id)
-                )
-            ]
+        conditions.append(
+            qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id))
         )
+    if owner_id:
+        conditions.append(
+            qmodels.FieldCondition(key="owner_id", match=qmodels.MatchValue(value=owner_id))
+        )
+    query_filter = qmodels.Filter(must=conditions) if conditions else None
     results = client.query_points(
         collection_name=settings.QDRANT_COLLECTION,
         query=query_vector,
@@ -132,7 +142,11 @@ def _load_bm25_index(client: QdrantClient) -> tuple[BM25Okapi | None, list[dict]
 
 
 def _keyword_search(
-    client: QdrantClient, query: str, limit: int, document_id: str | None
+    client: QdrantClient,
+    query: str,
+    limit: int,
+    document_id: str | None,
+    owner_id: str | None,
 ) -> list[dict]:
     index, payloads = _load_bm25_index(client)
     if index is None:
@@ -145,6 +159,8 @@ def _keyword_search(
             break  # `ranked` is sorted descending, so every later score is <= 0 too
         payload = payloads[i]
         if document_id and payload["document_id"] != document_id:
+            continue
+        if owner_id and payload.get("owner_id") != owner_id:
             continue
         results.append({"score": float(scores[i]), **_payload_to_chunk(payload)})
         if len(results) >= limit:
@@ -172,15 +188,28 @@ def _fuse_rrf(result_lists: list[list[dict]], limit: int) -> list[dict]:
     return fused
 
 
-def search(query: str, top_k: int | None = None, document_id: str | None = None) -> list[dict]:
+def search(
+    query: str,
+    top_k: int | None = None,
+    document_id: str | None = None,
+    owner_id: str | None = None,
+) -> list[dict]:
+    """owner_id scopes retrieval to one tenant's documents (scorecard item
+    11's per-tenant data isolation). Pass the *authenticated* identity, not
+    a client-supplied one — anyone able to set it arbitrarily could read
+    another tenant's corpus, the same class of bug the per-user API-key fix
+    closed for chat memory (see app/core/auth.py). When owner_id is given,
+    matching is exact and fails closed: a chunk with no owner_id stamped
+    (ingested before this feature, or in an unconfigured-gate/local-dev
+    deployment) is invisible to a scoped search, not treated as shared."""
     client = get_client()
     limit = top_k or settings.TOP_K
     # Fetch a wider pool from each method than the final limit so fusion
     # has enough from both sides to actually blend, rather than one
     # method's own top results alone determining the merged top `limit`.
     pool = max(limit * 2, limit + 5)
-    dense = _dense_search(client, query, pool, document_id)
-    keyword = _keyword_search(client, query, pool, document_id)
+    dense = _dense_search(client, query, pool, document_id, owner_id)
+    keyword = _keyword_search(client, query, pool, document_id, owner_id)
     return _fuse_rrf([dense, keyword], limit)
 
 

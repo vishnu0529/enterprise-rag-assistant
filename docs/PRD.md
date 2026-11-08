@@ -137,14 +137,14 @@ newer numbers are authoritative, not this snapshot.
 
 ## Open questions / risks
 
-- **Access control (scorecard item 11): per-user identity is built, per-tenant
-  data isolation is not.** Each `X-API-Key` now resolves to a specific user
-  (`app/core/auth.py`, backed by `api_keys.json`), and `/chat` sessions and
-  trace spans carry that identity instead of trusting a client-supplied
-  `user_id`. What's still missing is per-tenant *data* scoping — every key
-  can still see every ingested document, since the corpus itself has no
-  owner field. That's a bigger, separate feature (needs a decision before
-  any real multi-client use), not a quick follow-on to this.
+- **Access control (scorecard item 11): per-user identity and per-tenant
+  data isolation are both built.** Each `X-API-Key` resolves to a specific
+  user (`app/core/auth.py`, backed by `api_keys.json`), and `/chat`
+  sessions and trace spans carry that identity instead of trusting a
+  client-supplied `user_id`. Every ingested document is stamped with its
+  owner, and `/documents` listing/deletion and `/chat` retrieval are all
+  scoped to it (`app/services/vector_store.py`'s `owner_id` filter) — one
+  key can no longer read or remove another key's documents.
 - **The CI eval gate is not yet a required branch-protection check** — it
   needs a repo secret (`GOOGLE_API_KEY`/`ANTHROPIC_API_KEY`) and a
   branch-protection setting, both left as deliberate repo-owner decisions

@@ -29,8 +29,10 @@ class FakeClient:
         self.dense_points = dense_points
         self.scroll_points = scroll_points
         self.scroll_call_count = 0
+        self.last_query_filter = None
 
     def query_points(self, **kwargs):
+        self.last_query_filter = kwargs.get("query_filter")
         return FakeQueryResult(self.dense_points)
 
     def scroll(self, **kwargs):
@@ -38,13 +40,14 @@ class FakeClient:
         return self.scroll_points, None
 
 
-def _payload(document_id: str, chunk_index: int, text: str) -> dict:
+def _payload(document_id: str, chunk_index: int, text: str, owner_id: str | None = None) -> dict:
     return {
         "document_id": document_id,
         "filename": f"{document_id}.md",
         "text": text,
         "page": None,
         "chunk_index": chunk_index,
+        "owner_id": owner_id,
     }
 
 
@@ -105,6 +108,103 @@ def test_keyword_search_surfaces_a_chunk_dense_search_missed():
 
     keys = {(r["document_id"], r["chunk_index"]) for r in results}
     assert ("docB", 0) in keys, "keyword match should rescue the chunk dense search missed"
+
+
+def test_dense_search_filters_by_owner_id():
+    """Scorecard item 11's per-tenant data isolation: a scoped search must
+    tell Qdrant to filter server-side, not just trust the caller to only
+    ask about its own chunks."""
+    fake_client = FakeClient([FakeScoredPoint(0.9, _payload("docA", 0, "text"))], [])
+
+    with patch.object(vector_store, "embed_query", return_value=[0.0]):
+        vector_store._dense_search(fake_client, "q", limit=5, document_id=None, owner_id="alice")
+
+    conditions = fake_client.last_query_filter.must
+    assert any(c.key == "owner_id" and c.match.value == "alice" for c in conditions)
+
+
+def test_dense_search_has_no_filter_when_owner_id_and_document_id_are_both_none():
+    fake_client = FakeClient([], [])
+    with patch.object(vector_store, "embed_query", return_value=[0.0]):
+        vector_store._dense_search(fake_client, "q", limit=5, document_id=None, owner_id=None)
+
+    assert fake_client.last_query_filter is None
+
+
+def test_keyword_search_excludes_chunks_owned_by_a_different_tenant():
+    # BM25's idf goes negative (and gets scored out entirely) when a term
+    # appears in most/all of a tiny corpus, so the term that matters
+    # ("expense") needs to stay a minority among enough filler docs to keep
+    # a positive score, like test_keyword_search_surfaces_a_chunk_dense_search_missed.
+    chunk_a = _payload("docA", 0, "Expense cap is set at twelve percent of fees.", owner_id="alice")
+    chunk_b = _payload(
+        "docB", 0, "Expense cap is set at twelve percent too, separately.", owner_id="bob"
+    )
+    fillers = [
+        _payload(f"docFiller{i}", 0, text)
+        for i, text in enumerate(
+            [
+                "Team roster assigns a sponsor and delivery lead for kickoff.",
+                "Liability under the agreement is bounded by total fees paid.",
+                "Standard payment terms are net thirty days from invoice date.",
+            ]
+        )
+    ]
+    fake_client = FakeClient(
+        [],
+        [FakeScrollPoint(chunk_a), FakeScrollPoint(chunk_b)]
+        + [FakeScrollPoint(f) for f in fillers],
+    )
+
+    results = vector_store._keyword_search(
+        fake_client, "expense cap", limit=10, document_id=None, owner_id="alice"
+    )
+
+    assert {r["document_id"] for r in results} == {"docA"}
+
+
+def test_keyword_search_excludes_unowned_chunks_when_scoped_to_a_tenant():
+    """Fail-closed: a chunk with no owner_id stamped (pre-isolation data,
+    or an unconfigured-gate ingest) must not leak into a scoped search."""
+    unowned = _payload("docA", 0, "expense cap details", owner_id=None)
+    fake_client = FakeClient([], [FakeScrollPoint(unowned)])
+
+    results = vector_store._keyword_search(
+        fake_client, "expense cap", limit=10, document_id=None, owner_id="alice"
+    )
+
+    assert results == []
+
+
+class FilteringFakeClient(FakeClient):
+    """Unlike FakeClient, actually honors query_filter's owner_id/document_id
+    conditions against its own payloads, so this test exercises real
+    end-to-end isolation rather than relying on the Python-side keyword
+    filter alone to carry the assertion."""
+
+    def query_points(self, query_filter=None, **kwargs):
+        self.last_query_filter = query_filter
+        points = self.dense_points
+        if query_filter:
+            wanted = {c.key: c.match.value for c in query_filter.must}
+            points = [p for p in points if all(p.payload.get(k) == v for k, v in wanted.items())]
+        return FakeQueryResult(points)
+
+
+def test_search_scopes_end_to_end_across_both_retrieval_methods():
+    alice_chunk = _payload("docA", 0, "expense cap is twelve percent", owner_id="alice")
+    bob_chunk = _payload("docB", 0, "expense cap is five percent", owner_id="bob")
+    dense_points = [FakeScoredPoint(0.9, alice_chunk), FakeScoredPoint(0.8, bob_chunk)]
+    scroll_points = [FakeScrollPoint(alice_chunk), FakeScrollPoint(bob_chunk)]
+    fake_client = FilteringFakeClient(dense_points, scroll_points)
+
+    with (
+        patch.object(vector_store, "get_client", return_value=fake_client),
+        patch.object(vector_store, "embed_query", return_value=[0.0]),
+    ):
+        results = search("expense cap", owner_id="alice")
+
+    assert {r["document_id"] for r in results} == {"docA"}
 
 
 def test_bm25_index_is_cached_until_invalidated():

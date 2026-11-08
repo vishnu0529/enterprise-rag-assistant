@@ -58,13 +58,13 @@ async def ingest_document(
             f"ingested here. See docs/DEPLOYMENT.md.",
         ) from e
 
-    chunks = chunk_document(document_id, file.filename, pages)
+    chunks = chunk_document(document_id, file.filename, pages, owner_id=user_id)
     if not chunks:
         raise HTTPException(400, "Document produced no usable chunks")
 
     upsert_chunks(chunks)
 
-    doc = Document(id=document_id, filename=file.filename, num_chunks=len(chunks))
+    doc = Document(id=document_id, filename=file.filename, num_chunks=len(chunks), owner_id=user_id)
     session.add(doc)
     session.commit()
 
@@ -76,7 +76,12 @@ def list_documents(
     session: Session = Depends(get_session),
     user_id: str | None = Depends(require_api_key),
 ):
-    return session.exec(select(Document)).all()
+    # No gate configured (local dev, single-tenant): unchanged, see everything.
+    # Gate configured: each tenant only sees documents they ingested.
+    query = select(Document)
+    if user_id is not None:
+        query = query.where(Document.owner_id == user_id)
+    return session.exec(query).all()
 
 
 @router.delete("/{document_id}")
@@ -86,7 +91,9 @@ def remove_document(
     user_id: str | None = Depends(require_api_key),
 ):
     doc = session.get(Document, document_id)
-    if not doc:
+    # A non-owner gets the same 404 as a nonexistent document, not a 403 —
+    # otherwise the endpoint would confirm another tenant's document exists.
+    if not doc or (user_id is not None and doc.owner_id != user_id):
         raise HTTPException(404, "Document not found")
     logger.info("document delete requested by user_id=%s document_id=%s", user_id, document_id)
     delete_document(document_id)

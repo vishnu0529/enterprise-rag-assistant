@@ -30,7 +30,9 @@ def load_text(file_path: Path) -> list[dict]:
     raise ValueError(f"Unsupported file type: {suffix}")
 
 
-def chunk_document(document_id: str, filename: str, pages: list[dict]) -> list[dict]:
+def chunk_document(
+    document_id: str, filename: str, pages: list[dict], owner_id: str | None = None
+) -> list[dict]:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.CHUNK_SIZE,
         chunk_overlap=settings.CHUNK_OVERLAP,
@@ -61,6 +63,7 @@ def chunk_document(document_id: str, filename: str, pages: list[dict]) -> list[d
                     "text": piece,
                     "page": page["page"],
                     "chunk_index": chunk_index,
+                    "owner_id": owner_id,
                 }
             )
             chunk_index += 1

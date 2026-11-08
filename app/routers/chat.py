@@ -58,7 +58,13 @@ def chat(
     # Cheap DB check before spending a Strategist LLM call on a corpus
     # that's empty anyway. The graph would reach the same no_documents
     # short-circuit itself, just after retrieval instead of before it.
-    if session.exec(select(Document)).first() is None:
+    # Scoped to the authenticated tenant so a caller with zero documents of
+    # their own doesn't skip straight to an LLM call over someone else's
+    # corpus-not-empty state (and vice versa doesn't see a false short-circuit).
+    documents_query = select(Document)
+    if authenticated_user is not None:
+        documents_query = documents_query.where(Document.owner_id == authenticated_user)
+    if session.exec(documents_query).first() is None:
         add_message(session, session_id, "user", request.question)
         add_message(session, session_id, "assistant", NO_DOCUMENTS_ANSWER)
         return ChatResponse(
@@ -79,6 +85,11 @@ def chat(
         user_id=effective_user_id,
         session_id=session_id,
         require_approval=request.require_approval,
+        # The authenticated identity, not effective_user_id: a client-supplied
+        # user_id in the body must not be able to scope retrieval into
+        # another tenant's documents (same spoofing class the per-user
+        # API-key fix closed for chat memory).
+        owner_id=authenticated_user,
     )
 
     add_message(session, session_id, "user", request.question)

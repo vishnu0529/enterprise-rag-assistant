@@ -183,7 +183,7 @@ def test_multi_hop_sub_queries_are_merged_and_deduped():
         "score": 0.95,
     }  # same (document_id, chunk_index) as chunk_a
 
-    def fake_search(query, top_k=None, document_id=None):
+    def fake_search(query, top_k=None, document_id=None, owner_id=None):
         return {
             "leave policy": [chunk_a, chunk_b],
             "leave increase over time": [duplicate_of_a_higher_score],

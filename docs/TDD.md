@@ -152,9 +152,9 @@ infrastructure-and-recovery. Summary of the escalation philosophy:
 - Nothing fails silently — every row in the inventory has a code and test
   reference, or it isn't claimed as handled.
 
-Known gaps, stated plainly: per-user identity is built (per-key, see
-`app/core/auth.py`) but per-tenant data isolation is not — every key can
-see every ingested document; the CI eval gate is not yet a required
+Known gaps, stated plainly: per-user identity and per-tenant data isolation
+are both built (per-key, see `app/core/auth.py` and `owner_id` filtering in
+`app/services/vector_store.py`); the CI eval gate is not yet a required
 branch-protection check.
 
 ## Observability
@@ -200,9 +200,6 @@ data-boundary incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Known limitations
 
-- Per-tenant data isolation is unbuilt (scorecard item 11, partially
-  closed) — per-user identity now exists via `api_keys.json`, but every
-  key can still see every ingested document; the corpus has no owner field.
 - `eval-gate` can fail the CI job but is not yet a required
   branch-protection check — needs a repo secret and a manual
   branch-protection setting.

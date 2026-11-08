@@ -108,11 +108,11 @@ unset for local dev (the gate is a no-op when empty).
 
 **Only ever ingest synthetic/sample documents into a public deployment.**
 Per-user keys mean you can now tell *who* asked for *what* (chat sessions
-and trace spans carry the resolved user_id), but there is still no
-per-tenant **data** isolation — the document corpus has no owner field, so
-anyone with any valid key can read anything already ingested, regardless of
-which key ingested it. A real tuition-payment letter with bank details and
-a home address was uploaded to this deployment during testing and had to
-be deleted; the synthetic documents in `sample_docs/proposal_corpus/` are
-the kind of thing this should hold instead, never a real client's
-proposals, CVs, or rate cards.
+and trace spans carry the resolved user_id), and the document corpus is now
+scoped per owner — each ingested document is stamped with the resolved
+user_id, and retrieval, listing, and deletion are all filtered to it, so one
+key can no longer read or remove another key's documents. A real
+tuition-payment letter with bank details and a home address was uploaded to
+this deployment during testing and had to be deleted; the synthetic
+documents in `sample_docs/proposal_corpus/` are the kind of thing this
+should hold instead, never a real client's proposals, CVs, or rate cards.

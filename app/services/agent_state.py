@@ -16,6 +16,7 @@ class RagAgentState(TypedDict, total=False):
     document_id: str | None
     history: list[dict]
     user_id: str | None
+    owner_id: str | None  # authenticated identity to scope retrieval to; see vector_store.search
     session_id: str
     requested_top_k: int | None  # caller-supplied hint, the Strategist may honor or override
     require_approval: bool  # opt-in: gate commercially-sensitive answers behind interrupt()

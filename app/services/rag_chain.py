@@ -52,9 +52,10 @@ def answer_question(
     top_k: int | None = None,
     document_id: str | None = None,
     history: list[dict] | None = None,
+    owner_id: str | None = None,
 ) -> dict:
     start = time.perf_counter()
-    chunks = search(question, top_k=top_k, document_id=document_id)
+    chunks = search(question, top_k=top_k, document_id=document_id, owner_id=owner_id)
 
     if not chunks:
         return {

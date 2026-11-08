@@ -64,3 +64,19 @@ def test_chunk_document_skips_blank_pieces():
     chunks = chunk_document("doc-3", "blank.txt", pages)
 
     assert chunks == []
+
+
+def test_chunk_document_stamps_owner_id_onto_every_chunk():
+    pages = [{"text": "Some body text.", "page": 1}]
+
+    chunks = chunk_document("doc-4", "owned.txt", pages, owner_id="alice")
+
+    assert chunks and all(c["owner_id"] == "alice" for c in chunks)
+
+
+def test_chunk_document_owner_id_defaults_to_none():
+    pages = [{"text": "Some body text.", "page": 1}]
+
+    chunks = chunk_document("doc-5", "unowned.txt", pages)
+
+    assert chunks and all(c["owner_id"] is None for c in chunks)

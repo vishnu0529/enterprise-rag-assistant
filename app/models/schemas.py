@@ -11,6 +11,11 @@ class Document(SQLModel, table=True):
     filename: str
     num_chunks: int
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    # Resolved identity (require_api_key) of whoever ingested this document.
+    # None when no key gate is configured (local dev, single-tenant). See
+    # app/services/vector_store.py's owner_id filtering for how this is
+    # enforced at retrieval/listing time, not just stored for display.
+    owner_id: str | None = Field(default=None, index=True)
 
 
 class ChatSession(SQLModel, table=True):
