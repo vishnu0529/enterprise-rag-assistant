@@ -156,7 +156,7 @@ figure and the caller opted in) → remember. Full component breakdown and desig
 | Testing | pytest, 95 tests, all mocked (no network/model load in CI) |
 | Lint/format | ruff |
 | Containers | Docker, docker-compose |
-| CI | GitHub Actions (lint → test → docker build) |
+| CI | GitHub Actions (lint → test → docker build → eval-gate → publish-eval-metrics); `eval-gate` is a required status check on `main` as of 2026-11-08 |
 
 ## Quick Start
 

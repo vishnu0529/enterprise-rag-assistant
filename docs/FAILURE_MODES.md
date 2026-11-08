@@ -39,7 +39,7 @@ rollback rather than manual reconstruction. Nothing fails silently.
 |---|---|---|---|
 | Answer not well-grounded (low faithfulness) | Retrieved context doesn't actually support the drafted answer | `critique_node` scores faithfulness against the retrieved chunks | Retries via `strategize` with feedback, capped at `DEFAULT_MAX_RETRIES`; if still bad, `escalate_node` prepends a visible review banner. `test_retries_send_strategist_back_to_replan_until_it_passes`, `test_escalation_banner_added_when_retries_exhausted_still_ungrounded` |
 | Answer cites no source | Draft doesn't include a `[Source N]` marker despite having context | `critique_node`'s `_CITATION_MARKER` check, exempting genuine refusals via `is_refusal()` | Same retry-then-escalate path as low faithfulness. `test_missing_citation_triggers_a_retry_even_when_faithful`, `test_refusal_answers_are_not_flagged_for_missing_citation` |
-| A golden-set regression is introduced | A code change causes a previously-correct answer to hallucinate or a trap to stop being refused | `scripts/run_golden_set.py` in the `eval-gate` CI job | Fails the CI job (exits non-zero on any trap answered instead of refused). **Not yet a merge-blocking required check**, because it needs a repo secret and a branch-protection setting, both left as deliberate repo-owner decisions, documented in `EVALUATION.md` |
+| A golden-set regression is introduced | A code change causes a previously-correct answer to hallucinate or a trap to stop being refused | `scripts/run_golden_set.py` in the `eval-gate` CI job | Fails the CI job (exits non-zero on any trap answered instead of refused). **Merge-blocking as of 2026-11-08**: `eval-gate` is a required status check on `main`, documented in `EVALUATION.md` |
 
 ## Human oversight
 

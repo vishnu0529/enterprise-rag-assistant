@@ -86,8 +86,8 @@ firm this size.
    tool retries its own search, I see a visible "needs bid-director review"
    flag rather than a confident-looking but shaky answer.
 6. *As the repo owner*, if a code change regresses answer quality, the CI
-   eval gate catches it on the golden set before merge (once wired up as a
-   required check).
+   eval gate catches it on the golden set before merge — a required check
+   on `main` as of 2026-11-08.
 7. *As the repo owner*, if the deployed process crashes mid-conversation,
    restarting it resumes the same session from where it left off rather
    than losing the exchange.
@@ -145,10 +145,9 @@ newer numbers are authoritative, not this snapshot.
   owner, and `/documents` listing/deletion and `/chat` retrieval are all
   scoped to it (`app/services/vector_store.py`'s `owner_id` filter) — one
   key can no longer read or remove another key's documents.
-- **The CI eval gate is not yet a required branch-protection check** — it
-  needs a repo secret (`GOOGLE_API_KEY`/`ANTHROPIC_API_KEY`) and a
-  branch-protection setting, both left as deliberate repo-owner decisions
-  (see [docs/EVALUATION.md](EVALUATION.md)).
+- **The CI eval gate is now a required branch-protection check** (2026-11-08:
+  `GOOGLE_API_KEY` set as a repo secret, `eval-gate` required on `main`),
+  see [docs/EVALUATION.md](EVALUATION.md).
 - **The engagement-document-review workflow has no code yet** — if that
   becomes the near-term priority over proposal drafting, it needs its own
   requirements pass, not an assumption that this graph generalizes to it

@@ -163,16 +163,13 @@ retrieval-ranking gap while debugging gs006/gs020/gs022/gs024:
 `scripts/run_golden_set.py` on every push and pull request, but only when a
 `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` repository secret is configured; if
 neither secret is set, the job skips with a clear message instead of failing
-the build for contributors who don't have one. **To make this a real,
-active merge gate:**
+the build for contributors who don't have one.
 
-1. Add `GOOGLE_API_KEY` (or `ANTHROPIC_API_KEY`) as a repository secret
-   (Settings → Secrets and variables → Actions).
-2. Mark `eval-gate` as a required status check under branch protection for
-   `main` (Settings → Branches). This repo does not enable that
-   automatically, since it changes what can block a merge and is a call for
-   whoever owns the repo to make deliberately, not something to switch on
-   silently.
+**Active as of 2026-11-08:** `GOOGLE_API_KEY` is set as a repository secret,
+and `eval-gate` is a required status check under branch protection for
+`main` — a failing golden set now genuinely blocks a merge, not just
+reports a warning. (Enabling this was a deliberate, one-time call by the
+repo owner, not something switched on silently.)
 
 Once the secret is set, a separate `publish-eval-metrics` job, running only
 on pushes to `main`, after `eval-gate` passes, runs

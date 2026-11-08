@@ -154,8 +154,8 @@ infrastructure-and-recovery. Summary of the escalation philosophy:
 
 Known gaps, stated plainly: per-user identity and per-tenant data isolation
 are both built (per-key, see `app/core/auth.py` and `owner_id` filtering in
-`app/services/vector_store.py`); the CI eval gate is not yet a required
-branch-protection check.
+`app/services/vector_store.py`); the CI eval gate is a required
+branch-protection check on `main` as of 2026-11-08.
 
 ## Observability
 
@@ -195,14 +195,13 @@ data-boundary incident history: [DEPLOYMENT.md](DEPLOYMENT.md).
   authoritative quality measurement (see Success metrics in
   [PRD.md](PRD.md)).
 - **CI pipeline (`.github/workflows/ci.yml`):** lint → test → docker-build
-  → eval-gate (skips without a configured key) → publish-eval-metrics (main
-  only, after eval-gate passes).
+  → eval-gate (a required status check on `main` as of 2026-11-08; a
+  `GOOGLE_API_KEY` repo secret is configured, so it runs for real rather
+  than skipping) → publish-eval-metrics (main only, after eval-gate
+  passes).
 
 ## Known limitations
 
-- `eval-gate` can fail the CI job but is not yet a required
-  branch-protection check — needs a repo secret and a manual
-  branch-protection setting.
 - Reranking and parent-document retrieval are not implemented (hybrid
   dense+BM25 retrieval is).
 - No Word document or web-page ingestion; no streaming chat responses; demo
