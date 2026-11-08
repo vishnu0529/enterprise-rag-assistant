@@ -33,6 +33,9 @@ class EvaluateResponse(BaseModel):
 def evaluate(request: EvaluateRequest, user_id: str | None = Depends(require_api_key)):
     logger.info("evaluate requested by user_id=%s", user_id)
     result = evaluate_question(
-        request.question, ground_truth=request.ground_truth, top_k=request.top_k
+        request.question,
+        ground_truth=request.ground_truth,
+        top_k=request.top_k,
+        owner_id=user_id,
     )
     return EvaluateResponse(**result.__dict__)

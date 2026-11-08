@@ -134,14 +134,20 @@ def score_context_recall(ground_truth: str, contexts: list[str]) -> float:
 
 
 def evaluate_question(
-    question: str, ground_truth: str | None = None, top_k: int | None = None
+    question: str,
+    ground_truth: str | None = None,
+    top_k: int | None = None,
+    owner_id: str | None = None,
 ) -> EvalResult:
     # Evaluation reuses the exact same path /chat uses (the corrective-RAG
     # graph), not a separate simplified path, so these metrics score real
     # production behaviour, including any reformulate-and-retry the graph did.
+    # owner_id must flow through here too: without it, a tenant-scoped
+    # /evaluate call would retrieve across every tenant's documents,
+    # bypassing the isolation vector_store.search() otherwise enforces.
     from app.services.rag_graph import answer_question_agentic
 
-    result = answer_question_agentic(question, top_k=top_k)
+    result = answer_question_agentic(question, top_k=top_k, owner_id=owner_id)
     contexts = result["contexts"]
 
     # The graph's critique node already scored faithfulness on this exact

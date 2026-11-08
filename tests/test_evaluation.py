@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from app.services.evaluation import (
+    evaluate_question,
     score_answer_relevancy,
     score_context_precision,
     score_context_recall,
@@ -110,3 +111,28 @@ def test_score_context_recall_all_statements_attributed():
 
 def test_score_context_recall_without_ground_truth_is_zero():
     assert score_context_recall("", ["some context"]) == 0.0
+
+
+def test_evaluate_question_forwards_owner_id_to_retrieval():
+    """Without this, a tenant-scoped /evaluate call would retrieve across
+    every tenant's documents, bypassing vector_store.search()'s isolation."""
+    fake_result = {
+        "answer": "25 days.",
+        "contexts": ["context"],
+        "faithfulness_score": 0.9,
+        "latency_ms": 1.0,
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+    }
+    with (
+        patch(
+            "app.services.rag_graph.answer_question_agentic", return_value=fake_result
+        ) as mock_answer,
+        # score_answer_relevancy / score_context_precision run their own LLM
+        # judge calls inside evaluate_question; stub them out so this test
+        # only exercises the owner_id plumbing, not a real network call.
+        patch("app.services.evaluation.call_llm_json", return_value={}),
+    ):
+        evaluate_question("How many annual leave days?", owner_id="alice")
+
+    mock_answer.assert_called_once_with("How many annual leave days?", top_k=None, owner_id="alice")
