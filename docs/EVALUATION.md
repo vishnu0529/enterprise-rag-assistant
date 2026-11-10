@@ -159,36 +159,37 @@ retrieval-ranking gap while debugging gs006/gs020/gs022/gs024:
 
 ## CI merge gate
 
-`.github/workflows/ci.yml` has an `eval-gate` job, after `test`, that runs
-`scripts/run_golden_set.py` on every push and pull request, but only when a
-`GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` repository secret is configured; if
-neither secret is set, the job skips with a clear message instead of failing
-the build for contributors who don't have one.
+`.github/workflows/ci.yml` has an `eval-gate` job, after `test`, that is a
+required status check under branch protection for `main`. It does **not**
+call a live LLM on every push — it runs
+`scripts/check_golden_set_metrics.py`, which just verifies the golden-set
+result already committed at `eval/golden_set_metrics.json` still shows a
+full pass (color `brightgreen`). A failing or stale committed result
+genuinely blocks a merge; it just doesn't cost API credits to check.
 
-**Active as of 2026-11-08:** `GOOGLE_API_KEY` is set as a repository secret,
-and `eval-gate` is a required status check under branch protection for
-`main` — a failing golden set now genuinely blocks a merge, not just
-reports a warning. (Enabling this was a deliberate, one-time call by the
-repo owner, not something switched on silently.)
+**Why it changed (2026-11-10):** `eval-gate` originally re-ran
+`scripts/run_golden_set.py` against a live LLM on every push. The first run
+with a live key failed 0/50, not from a real regression: Gemini's free tier
+caps at 10 requests/min, and `run_golden_set.py` fires several calls per
+item (strategist, drafter, critique, plus one `context_precision` judge
+call per retrieved chunk) with no pacing between them, so it hit `429
+RESOURCE_EXHAUSTED` immediately. That was fixed with
+`LLM_MIN_INTERVAL_SECONDS: "6.5"`, but the job then started failing again
+for a different reason: the `GOOGLE_API_KEY` account's prepaid credits ran
+out (`402 RESOURCE_EXHAUSTED`), a billing problem, not a code regression.
+Re-running the full golden set on every single push was spending real money
+just to re-confirm the same already-known-good result, so `eval-gate` now
+checks the committed result instead of re-running live.
 
-The first run with the secret live failed 0/50, not from a real regression:
-Gemini's free tier caps at 10 requests/min, and `run_golden_set.py` fires
-several calls per item (strategist, drafter, critique, plus one
-`context_precision` judge call per retrieved chunk) with no pacing between
-them, so it hit `429 RESOURCE_EXHAUSTED` immediately. Fixed by setting
-`LLM_MIN_INTERVAL_SECONDS: "6.5"` in the `eval-gate` job's env in
-`ci.yml` — the app already supported this exact scenario (see the setting's
-comment in `app/core/config.py`), it just wasn't turned on for CI. This
-makes the job noticeably slower (several minutes, paced one call at a time)
-but genuinely correct — see the Trend section below for actual pass/fail
-results against this pacing.
-
-Once the secret is set, a separate `publish-eval-metrics` job, running only
-on pushes to `main`, after `eval-gate` passes, runs
-`scripts/update_eval_chart.py` and commits the refreshed
-`eval/golden_set_metrics.json`, `eval/metrics_history.jsonl`, and this file's
-trend chart back to `main`. That's what makes the badge and chart below move
-on their own after every merge, rather than being a hand-updated snapshot.
+To refresh the committed numbers with a fresh live run (e.g. after a code
+change that could affect retrieval or generation quality, or after fixing
+the API key), trigger the `publish-eval-metrics` job by hand from the
+Actions tab (`workflow_dispatch`) once a working `GOOGLE_API_KEY` or
+`ANTHROPIC_API_KEY` is in place. It runs `scripts/run_golden_set.py` and
+`scripts/update_eval_chart.py`, then commits the refreshed
+`eval/golden_set_metrics.json`, `eval/metrics_history.jsonl`, and this
+file's trend chart back to `main`. That's what the badge and chart below
+reflect — a deliberately-triggered live run, not an automatic one.
 
 ### Trend
 
